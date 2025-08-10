@@ -1,4 +1,4 @@
-pub mod node;
+pub mod nodes;
 pub mod services;
 
 use services::parser::*;
