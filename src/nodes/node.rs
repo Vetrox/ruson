@@ -28,7 +28,7 @@ pub enum SoNError {
 }
 
 impl Node {
-    pub fn new_start(
+    pub fn new(
         graph: Rc<RefCell<Vec<Node>>>,
         inputs: Vec<usize>,
         node_type: NodeKind,
@@ -73,8 +73,8 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![]));
 
         // Act
-        let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Start).unwrap();
-        let nid2 = Node::new_start(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Start).unwrap();
+        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
 
         // Assert
         assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().outputs[0]);
@@ -87,9 +87,21 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![]));
 
         // Act
-        let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
 
         // Assert
         assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Constant { value: 42 }));
+    }
+
+    #[test]
+    fn should_construct_return_node() {
+        // Arrange
+        let graph = Rc::new(RefCell::new(vec![]));
+
+        // Act
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
+
+        // Assert
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Return));
     }
 }
