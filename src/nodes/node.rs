@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 #[derive(Debug)]
 pub struct Node {
     graph: Rc<RefCell<Vec<Node>>>,
-    node_kind: NodeKind,
+    pub node_kind: NodeKind,
     /// ordered list of def`s this Node is depending on
     pub inputs: Vec<usize>,
     pub outputs: Vec<usize>,
@@ -17,8 +17,9 @@ impl PartialEq for Node {
 
 #[derive(Debug)]
 pub enum NodeKind {
-    Start,
     Constant { value: i64 },
+    Return,
+    Start,
 }
 
 #[derive(Debug)]
@@ -33,19 +34,15 @@ impl Node {
         node_type: NodeKind,
     ) -> Result<usize, SoNError> {
         let index = graph.borrow().len();
-
         let node = Node {
             graph: graph.clone(),
             node_kind: node_type,
             inputs,
             outputs: vec![],
         };
-
         add_use(graph.clone(), index, &node.inputs)?;
-
         graph.borrow_mut().push(node);
-
-        Result::Ok(index)
+        Ok(index)
     }
 }
 
@@ -58,23 +55,11 @@ fn add_use(
     for id in inputs {
         match graph_br.get_mut(*id) {
             Some(def) => def.outputs.push(index),
-            None => return Result::Err(SoNError::NodeIdNotExisting),
+            None => return Err(SoNError::NodeIdNotExisting),
         }
     }
-    Result::Ok(())
+    Ok(())
 }
-
-// #[derive(Default)]
-// struct Graph {
-//     graph: Rc<RefCell<Vec<Node>>>,
-// }
-
-// impl Graph {
-//     unsafe fn get(&self, index: usize) -> Ref<Option<&Node>> {
-//         let vec_ref = self.graph.borrow();
-//         Ref::map(vec_ref, |v| v.get(index))
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -84,20 +69,27 @@ mod tests {
 
     #[test]
     fn should_run_parse() {
+        // Arrange
         let graph = Rc::new(RefCell::new(vec![]));
 
+        // Act
         let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Start).unwrap();
         let nid2 = Node::new_start(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
 
+        // Assert
         assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().outputs[0]);
         assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().outputs.len());
     }
 
     #[test]
     fn should_construct_constant_node() {
+        // Arrange
         let graph = Rc::new(RefCell::new(vec![]));
 
+        // Act
         let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
+
+        // Assert
         assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Constant { value: 42 }));
     }
 }
