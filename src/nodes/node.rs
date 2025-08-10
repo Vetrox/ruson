@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 #[derive(Debug)]
 pub struct Node {
     graph: Rc<RefCell<Vec<Node>>>,
-    node_type: NodeType,
+    node_kind: NodeKind,
     /// ordered list of def`s this Node is depending on
     pub inputs: Vec<usize>,
     pub outputs: Vec<usize>,
@@ -16,7 +16,7 @@ impl PartialEq for Node {
 }
 
 #[derive(Debug)]
-pub enum NodeType {
+pub enum NodeKind {
     Start,
     Constant { value: i64 },
 }
@@ -30,13 +30,13 @@ impl Node {
     pub fn new_start(
         graph: Rc<RefCell<Vec<Node>>>,
         inputs: Vec<usize>,
-        node_type: NodeType,
+        node_type: NodeKind,
     ) -> Result<usize, SoNError> {
         let index = graph.borrow().len();
 
         let node = Node {
             graph: graph.clone(),
-            node_type,
+            node_kind: node_type,
             inputs,
             outputs: vec![],
         };
@@ -86,10 +86,18 @@ mod tests {
     fn should_run_parse() {
         let graph = Rc::new(RefCell::new(vec![]));
 
-        let nid1 = Node::new_start(graph.clone(), vec![], NodeType::Start).unwrap();
-        let nid2 = Node::new_start(graph.clone(), vec![nid1], NodeType::Start).unwrap();
+        let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Start).unwrap();
+        let nid2 = Node::new_start(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
 
         assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().outputs[0]);
         assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().outputs.len());
+    }
+
+    #[test]
+    fn should_construct_constant_node() {
+        let graph = Rc::new(RefCell::new(vec![]));
+
+        let nid1 = Node::new_start(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Constant { value: 42 }));
     }
 }
