@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
 pub struct Node {
-    graph: Rc<RefCell<Vec<Node>>>,
+    graph: Rc<RefCell<Vec<Option<Node>>>>,
     pub node_kind: NodeKind,
     /// ordered list of def`s this Node is depending on
     pub inputs: Vec<usize>,
@@ -26,37 +26,38 @@ pub enum NodeKind {
 pub enum SoNError {
     NodeIdNotExisting,
     NumberCannotStartWith0,
+    SyntaxExpected { expected: String, actual: String },
 }
 
 impl Node {
     pub fn new(
-        graph: Rc<RefCell<Vec<Node>>>,
+        graph: Rc<RefCell<Vec<Option<Node>>>>,
         inputs: Vec<usize>,
-        node_type: NodeKind,
+        node_kind: NodeKind,
     ) -> Result<usize, SoNError> {
         let index = graph.borrow().len();
         let node = Node {
             graph: graph.clone(),
-            node_kind: node_type,
+            node_kind,
             inputs,
             outputs: vec![],
         };
         add_use(graph.clone(), index, &node.inputs)?;
-        graph.borrow_mut().push(node);
+        graph.borrow_mut().push(Some(node));
         Ok(index)
     }
 }
 
 fn add_use(
-    graph: Rc<RefCell<Vec<Node>>>,
+    graph: Rc<RefCell<Vec<Option<Node>>>>,
     index: usize,
     inputs: &Vec<usize>,
 ) -> Result<(), SoNError> {
     let mut graph_br = graph.borrow_mut();
     for id in inputs {
         match graph_br.get_mut(*id) {
-            Some(def) => def.outputs.push(index),
-            None => return Err(SoNError::NodeIdNotExisting),
+            Some(Some(def)) => def.outputs.push(index),
+            _ => return Err(SoNError::NodeIdNotExisting),
         }
     }
     Ok(())
@@ -78,8 +79,8 @@ mod tests {
         let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
 
         // Assert
-        assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().outputs[0]);
-        assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().outputs.len());
+        assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().outputs[0]);
+        assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().as_ref().unwrap().outputs.len());
     }
 
     #[test]
@@ -91,7 +92,7 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Constant { value: 42 }));
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Constant { value: 42 }));
     }
 
     #[test]
@@ -103,6 +104,6 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().node_kind, NodeKind::Return));
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 }
