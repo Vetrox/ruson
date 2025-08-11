@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn should_lex_dbg() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("1230"));
+        let mut lexer = Lexer::new("1230".to_string());
 
         // Act
         let token = lexer.dbg_get_any_next_token();
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn should_lex_number() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("1230"));
+        let mut lexer = Lexer::new("1230".to_string());
 
         // Act
         let token = lexer.parse_number();
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn should_lex_number_but_stop_at_non_number() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("123a"));
+        let mut lexer = Lexer::new("123a".to_string());
 
         // Act
         let token = lexer.parse_number();
@@ -170,7 +170,7 @@ mod tests {
     #[should_panic(expected = "numbers must start with a digit")]
     fn should_fail_when_parse_number_is_called_without_checking_for_number_first() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("a123"));
+        let mut lexer = Lexer::new("a123".to_string());
 
         // Act
         lexer.parse_number();
@@ -179,10 +179,10 @@ mod tests {
     #[test]
     fn should_match_loosely() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("waitaminute"));
+        let mut lexer = Lexer::new("waitaminute".to_string());
 
         // Act
-        let m = lexer.matsch(&String::from("wait"));
+        let m = lexer.matsch(&"wait".to_string());
 
         // Assert
         assert!(m);
@@ -192,10 +192,10 @@ mod tests {
     #[test]
     fn should_match_exactly() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("waitaminute"));
+        let mut lexer = Lexer::new("waitaminute".to_string());
 
         // Act
-        let m = lexer.matschx(&String::from("wait"));
+        let m = lexer.matschx(&"wait".to_string());
 
         // Assert
         assert!(!m);
@@ -205,10 +205,10 @@ mod tests {
     #[test]
     fn should_match_still_exactly_for_non_id_letters() {
         // Arrange
-        let mut lexer = Lexer::new(String::from("wait!aminute"));
+        let mut lexer = Lexer::new("wait!aminute".to_string());
 
         // Act
-        let m = lexer.matschx(&String::from("wait"));
+        let m = lexer.matschx(&"wait".to_string());
 
         // Assert
         assert!(m);
