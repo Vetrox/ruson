@@ -151,6 +151,9 @@ mod tests {
             }
             _ => assert!(false)
         }
+        let my_node = node.clone();
+        drop(g);
+        println!("Parsing result is: {}", my_node);
     }
 
     #[test]

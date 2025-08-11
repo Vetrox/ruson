@@ -1,6 +1,8 @@
+use std::fmt::{Display, Formatter};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct Node {
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     pub node_kind: NodeKind,
@@ -15,11 +17,27 @@ impl PartialEq for Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeKind {
     Constant { value: i64 },
     Return,
     Start,
+}
+
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.node_kind {
+            NodeKind::Constant { value } => write!(f, "Constant({})", value)?,
+            NodeKind::Return => {
+                let data_nid = self.inputs.get(1).unwrap();
+                let node = self.graph.borrow_mut().get(*data_nid).unwrap().as_ref().unwrap().clone();
+                write!(f, "Return({})", format!("{}", node))?
+            }
+            NodeKind::Start => write!(f, "Start()")?,
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
