@@ -17,6 +17,47 @@ impl Parser {
         Ok(ctx)
     }
 
+    /// a.k.a. garbage collect for the java stans
+    fn drop_unused_nodes_cap(&mut self, cap: usize) {
+        let len = self.graph.borrow().len();
+        for nid in 0..len {
+            self.attempt_drop_node(nid, cap);
+        }
+    }
+
+    fn attempt_drop_node(&mut self, nid: usize, cap: usize) -> usize {
+        if nid == START_NODE {
+            return 0;
+        }
+        if cap <= 0 {
+            return 0;
+        }
+        let inputs = self.graph.borrow_mut().get(nid).map(|n| match n.as_ref() {
+            Some(node) if node.outputs.is_empty() => node.inputs.clone(),
+            _ => vec![]
+        });
+        let mut c = cap;
+        if let Some(inputs) = inputs {
+            for neigh in inputs.into_iter() {
+                if let Some(Some(n)) = self.graph.borrow_mut().get_mut(neigh) {
+                    n.outputs.retain(|&k| k != nid);
+                }
+                c -= self.attempt_drop_node(neigh, c);
+            }
+        }
+        if c > 0 {
+            if matches!(self.graph.borrow_mut().get_mut(nid), Some(Some(n)) if n.outputs.is_empty()) {
+                c -= 1;
+                *self.graph.borrow_mut().get_mut(nid).unwrap() = None;
+            };
+        }
+        cap - c
+    }
+
+    fn drop_unused_nodes(&mut self) {
+        self.drop_unused_nodes_cap(100);
+    }
+
     fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
         Node::new(self.graph.clone(), inputs, node_kind)
     }
@@ -110,5 +151,46 @@ mod tests {
             }
             _ => assert!(false)
         }
+    }
+
+    #[test]
+    fn should_drop_unused_nodes_but_never_the_start_node() {
+        // Arrange
+        let mut parser = Parser::new("return 1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+        parser.drop_unused_nodes();
+
+        // Assert
+        assert_eq!(1, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+    }
+
+    #[test]
+    fn should_not_drop_any_node_when_cap_is_0() {
+        // Arrange
+        let mut parser = Parser::new("return 1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+        parser.drop_unused_nodes_cap(0);
+
+        // Assert
+        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+    }
+
+    #[test]
+    fn should_only_drop_one_node_when_cap_is_1() {
+        // Arrange
+        let mut parser = Parser::new("return 1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+        parser.drop_unused_nodes_cap(1);
+
+        // Assert
+        assert_eq!(2, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 }
