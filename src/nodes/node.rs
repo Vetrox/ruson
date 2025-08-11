@@ -25,6 +25,7 @@ pub enum NodeKind {
 #[derive(Debug)]
 pub enum SoNError {
     NodeIdNotExisting,
+    NumberCannotStartWith0,
 }
 
 impl Node {
