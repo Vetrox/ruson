@@ -117,7 +117,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodes::node::NodeKind;
+    use crate::nodes::node::{NodeKind, SoNError};
     use crate::services::parser::{Parser, START_NODE};
 
     #[test]
@@ -195,5 +195,41 @@ mod tests {
         // Assert
         assert_eq!(2, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+    }
+
+    #[test]
+    fn should_fail_when_invalid_syntax_is_used() {
+        // Arrange
+        let mut parser = Parser::new("ret 1;").unwrap();
+
+        // Act
+        let result = parser.parse();
+
+        // Assert
+        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "Statement"));
+    }
+
+    #[test]
+    fn should_check_for_semicolon() {
+        // Arrange
+        let mut parser = Parser::new("return 1").unwrap();
+
+        // Act
+        let result = parser.parse();
+
+        // Assert
+        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == ";"));
+    }
+
+    #[test]
+    fn should_fail_at_brace() {
+        // Arrange
+        let mut parser = Parser::new("return 1;}").unwrap();
+
+        // Act
+        let result = parser.parse();
+
+        // Assert
+        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "End of file"));
     }
 }
