@@ -79,9 +79,13 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
 fn node_icon(node: &Node) -> String {
     match node.node_kind {
+        NodeKind::Add => "+".into(),
         NodeKind::Constant { value } => format!("#{}", value),
+        NodeKind::Div => "/".into(),
+        NodeKind::Mul => "*".into(),
         NodeKind::Return => "Return".into(),
-        NodeKind::Start => "Start".into()
+        NodeKind::Start => "Start".into(),
+        NodeKind::Sub => "-".into(),
     }
 }
 
