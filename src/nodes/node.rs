@@ -24,7 +24,6 @@ pub enum NodeKind {
     Start,
 }
 
-
 impl Display for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.node_kind {
@@ -63,6 +62,15 @@ impl Node {
         add_use(graph.clone(), index, &node.inputs)?;
         graph.borrow_mut().push(Some(node));
         Ok(index)
+    }
+
+    /// returns whether this node is associated with the control flow graph
+    pub fn is_cfg(&self) -> bool {
+        match self.node_kind {
+            NodeKind::Return
+            | NodeKind::Start => true,
+            _ => false
+        }
     }
 }
 

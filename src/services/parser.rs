@@ -3,18 +3,22 @@ use crate::services::lexer::Lexer;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-struct Parser {
+pub struct Parser {
     lexer: Lexer,
-    graph: Rc<RefCell<Vec<Option<Node>>>>,
+    pub graph: Rc<RefCell<Vec<Option<Node>>>>,
 }
 
-const START_NODE: usize = 0;
+pub(crate) const START_NODE: usize = 0;
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
         let ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])) };
         Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
         Ok(ctx)
+    }
+
+    pub fn src(&self) -> String {
+        self.lexer.input.clone()
     }
 
     /// a.k.a. garbage collect for the java stans

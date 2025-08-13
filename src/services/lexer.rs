@@ -1,7 +1,7 @@
 use crate::nodes::node::SoNError;
 
 pub struct Lexer {
-    input: String,
+    pub input: String,
     position: usize,
 }
 
