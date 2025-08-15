@@ -52,7 +52,7 @@ impl Node {
         inputs: Vec<usize>,
         node_kind: NodeKind,
     ) -> Result<usize, SoNError> {
-        let index = graph.borrow().len();
+        let index = find_first_empty_cell(&graph);
         let node = Node {
             graph: graph.clone(),
             node_kind,
@@ -60,7 +60,10 @@ impl Node {
             outputs: vec![],
         };
         add_use(graph.clone(), index, &node.inputs)?;
-        graph.borrow_mut().push(Some(node));
+        if index == graph.borrow().len() {
+            graph.borrow_mut().push(None);
+        }
+        graph.borrow_mut()[index] = Some(node);
         Ok(index)
     }
 
@@ -72,6 +75,18 @@ impl Node {
             _ => false
         }
     }
+}
+
+pub fn find_first_empty_cell(graph: &Rc<RefCell<Vec<Option<Node>>>>) -> usize {
+    let g = graph.borrow();
+    let index = g.iter().enumerate().find_map(|(i, x)| {
+        if x.is_none() {
+            Some(i)
+        } else {
+            None
+        }
+    }).unwrap_or_else(|| g.len());
+    index
 }
 
 fn add_use(
@@ -96,7 +111,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_run_parse() {
+    fn should_construct_start_node() {
         // Arrange
         let graph = Rc::new(RefCell::new(vec![]));
 
@@ -130,6 +145,19 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
 
         // Assert
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+    }
+
+    #[test]
+    fn should_construct_return_node_in_empty_slot() {
+        // Arrange
+        let graph = Rc::new(RefCell::new(vec![None]));
+
+        // Act
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
+
+        // Assert
+        assert_eq!(1, graph.borrow().len());
         assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 }

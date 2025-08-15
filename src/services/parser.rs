@@ -63,6 +63,7 @@ impl Parser {
     }
 
     fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
+        self.drop_unused_nodes();
         Node::new(self.graph.clone(), inputs, node_kind)
     }
 
@@ -101,7 +102,7 @@ impl Parser {
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
         let value = self.lexer.parse_number()?;
-        Ok(Node::new(self.graph.clone(), vec![START_NODE], NodeKind::Constant { value })?)
+        Ok(self.add_node(vec![START_NODE], NodeKind::Constant { value })?)
     }
 
     /// require this syntax
