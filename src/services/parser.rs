@@ -1,4 +1,4 @@
-use crate::nodes::node::{Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies, add_usage_for_deps, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,12 +8,15 @@ pub struct Parser {
     pub graph: Rc<RefCell<Vec<Option<Node>>>>,
 }
 
-pub(crate) const START_NODE: usize = 0;
+pub(crate) const KEEP_ALIVE_NID: usize = 0;
+pub(crate) const CTRL_NID: usize = 1; // TODO: Introduce ScopeNode for this
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])) };
+        let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])) };
+        Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive)?;
         Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
+        ctx.keep_node(CTRL_NID)?; // TODO: Introduce ScopeNode for this
         Ok(ctx)
     }
 
@@ -30,7 +33,7 @@ impl Parser {
     }
 
     fn attempt_drop_node(&mut self, nid: usize, cap: usize) -> usize {
-        if nid == START_NODE {
+        if nid == KEEP_ALIVE_NID {
             return 0;
         }
         if cap <= 0 {
@@ -84,8 +87,20 @@ impl Parser {
 
     fn parse_return(&mut self) -> Result<usize, SoNError> {
         let primary = self.parse_expression()?;
+        self.keep_node(primary)?;
         self.require(";")?;
-        self.add_node(vec![START_NODE, primary], NodeKind::Return)
+        let ret = self.add_node(vec![CTRL_NID, primary], NodeKind::Return);
+        self.unkeep_node(primary)?;
+        ret
+    }
+
+    fn keep_node(&mut self, nid: usize) -> Result<(), SoNError> {
+        add_usage_for_deps(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])?;
+        add_dependencies(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])
+    }
+
+    fn unkeep_node(&mut self, nid: usize) -> Result<(), SoNError> {
+        remove_dependency(self.graph.clone(), KEEP_ALIVE_NID, nid)
     }
 
     fn parse_expression(&mut self) -> Result<usize, SoNError> {
@@ -102,7 +117,7 @@ impl Parser {
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
         let value = self.lexer.parse_number()?;
-        Ok(self.add_node(vec![START_NODE], NodeKind::Constant { value })?)
+        Ok(self.add_node(vec![], NodeKind::Constant { value })?)
     }
 
     /// require this syntax
@@ -122,8 +137,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodes::node::{NodeKind, SoNError};
-    use crate::services::parser::{Parser, START_NODE};
+    use crate::nodes::node::{node_exists_unique, NodeKind, SoNError};
+    use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID};
 
     #[test]
     fn should_be_able_to_create_new_parser() {
@@ -131,8 +146,8 @@ mod tests {
         let parser = Parser::new("return 1;").unwrap();
 
         // Assert
-        assert_eq!(1, parser.graph.borrow().len());
-        assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(2, parser.graph.borrow().len());
+        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -149,7 +164,7 @@ mod tests {
         assert!(matches!(node.node_kind, NodeKind::Return));
         assert!(matches!(node.outputs.as_slice(), []));
         match node.inputs.as_slice() {
-            [START_NODE, x] => {
+            [CTRL_NID, x] => {
                 let dnode = g.get(*x).unwrap().as_ref().unwrap();
                 assert!(matches!(dnode.node_kind, NodeKind::Constant { value: 1 }));
                 assert!(matches!(dnode.outputs.as_slice(), [y] if y.eq(&result) ));
@@ -162,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn should_drop_unused_nodes_but_never_the_start_node() {
+    fn should_drop_unused_nodes_but_never_the_keepalive_node() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
 
@@ -171,8 +186,8 @@ mod tests {
         parser.drop_unused_nodes();
 
         // Assert
-        assert_eq!(1, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(2, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
     #[test]
@@ -185,7 +200,7 @@ mod tests {
         parser.drop_unused_nodes_cap(0);
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert_eq!(4, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
     }
 
     #[test]
@@ -198,8 +213,8 @@ mod tests {
         parser.drop_unused_nodes_cap(1);
 
         // Assert
-        assert_eq!(2, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().get(START_NODE).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -236,5 +251,18 @@ mod tests {
 
         // Assert
         assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "End of file"));
+    }
+
+    #[test]
+    fn shoulld_delete_nodes_that_arent_kept_alive() {
+        // Arrange
+        let mut parser = Parser::new("return 1;").unwrap();
+        let nid = parser.add_node(vec![], NodeKind::Start).unwrap(); // this node is not kept
+
+        // Act
+        let _result = parser.parse();
+
+        // Assert
+        assert!(!node_exists_unique(&parser.graph.borrow(), nid, nid));
     }
 }

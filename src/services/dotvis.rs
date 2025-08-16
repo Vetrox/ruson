@@ -81,7 +81,8 @@ fn node_icon(node: &Node) -> String {
     match node.node_kind {
         NodeKind::Constant { value } => format!("#{}", value),
         NodeKind::Return => "Return".into(),
-        NodeKind::Start => "Start".into()
+        NodeKind::Start => "Start".into(),
+        NodeKind::KeepAlive => "KeepAlive".into(),
     }
 }
 
