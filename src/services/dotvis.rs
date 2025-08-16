@@ -26,9 +26,10 @@ pub fn as_dotfile(parser: &Parser) -> String {
     // Just the Nodes first, in a cluster no edges
     sb.push_str("\tsubgraph cluster_Nodes {\n"); // Magic "cluster_" in the subgraph name
 
-    for (nid, n) in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)).enumerate() {
+
+    for n in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)) {
         sb.push_str("\t\t");
-        sb.push_str(&format!("Node_{}", nid));
+        sb.push_str(&format!("Node_{}", n.nid));
         sb.push_str(" [ ");
         let lab = node_icon(n);
         // control nodes have box shape
@@ -45,14 +46,14 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
     // Walk the Node edges
     sb.push_str("\tedge [ fontname=Helvetica, fontsize=8 ];\n");
-    for (nid, n) in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)).enumerate() {
+    for n in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)) {
         // In this chapter we do display the Constant->Start edge;
         for (i, def_nid) in n.inputs.iter().enumerate() {
             //if (def != null) { TODO: currently we do NOT allow for Optionals in the inputs, which needs to be supported in the future.
             if let Some(Some(def)) = parser.graph.borrow().get(*def_nid) {
                 // Most edges land here use->def
                 sb.push('\t');
-                sb.push_str(&format!("Node_{}", nid));
+                sb.push_str(&format!("Node_{}", n.nid));
                 sb.push_str(" -> ");
                 sb.push_str(&format!("Node_{}", def_nid));
                 // Number edges, so we can see how they track
@@ -97,7 +98,7 @@ mod tests {
         dbg!(&dotfile);
 
         // Assert
-        assert_eq!(dotfile, "digraph mygraph{\n/*\n\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_0 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n}\n");
+        assert_eq!(dotfile, "digraph mygraph{\n/*\n\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n}\n");
     }
 
     #[test]
@@ -112,6 +113,6 @@ mod tests {
         dbg!(&dotfile);
 
         // Assert
-        assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_0 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_1 [ label=\"#1\" ];\n\t\tNode_2 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_2 -> Node_1[taillabel=0 color=red];\n\tNode_2 -> Node_2[taillabel=1];\n}\n");
+        assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_2 [ label=\"#1\" ];\n\t\tNode_3 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_3 -> Node_1[taillabel=0 color=red];\n\tNode_3 -> Node_2[taillabel=1];\n}\n");
     }
 }

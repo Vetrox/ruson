@@ -15,6 +15,7 @@ pub struct Node {
     pub outputs: Vec<usize>,
     /// unique id that is incremented with every new node
     pub uid: usize,
+    pub nid: usize,
 }
 
 impl PartialEq for Node {
@@ -61,7 +62,7 @@ impl Node {
         node_kind: NodeKind,
     ) -> Result<usize, SoNError> {
         let index = find_first_empty_cell(&graph);
-        let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst) };
+        let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index };
         let inputs_c = inputs.clone();
         add_usage_for_deps(graph.clone(), index, &inputs_c)?;
         if index == graph.borrow().len() {
