@@ -1,5 +1,5 @@
-use crate::nodes::node::{Node, NodeKind};
-use crate::services::parser::{Parser, KEEP_ALIVE_NID};
+use crate::nodes::node::{iter_graph, Node, NodeKind};
+use crate::services::parser::Parser;
 
 pub fn as_dotfile(parser: &Parser) -> String {
     let mut sb = String::new();
@@ -25,50 +25,45 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
     // Just the Nodes first, in a cluster no edges
     sb.push_str("\tsubgraph cluster_Nodes {\n"); // Magic "cluster_" in the subgraph name
-    let no_of_nodes = parser.graph.borrow().len();
-    for nid in 0..no_of_nodes {
-        if let Some(Some(n)) = parser.graph.borrow().get(nid) && nid != KEEP_ALIVE_NID {
-            sb.push_str("\t\t");
-            sb.push_str(&format!("Node_{}", nid));
-            sb.push_str(" [ ");
-            let lab = node_icon(n);
-            // control nodes have box shape
-            // other nodes are ellipses, i.e. default shape
-            if n.is_cfg() {
-                sb.push_str("shape=box style=filled fillcolor=yellow ");
-            }
-            sb.push_str("label=\"");
-            sb.push_str(&lab);
-            sb.push_str("\" ");
-            sb.push_str("];\n");
+
+    for (nid, n) in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)).enumerate() {
+        sb.push_str("\t\t");
+        sb.push_str(&format!("Node_{}", nid));
+        sb.push_str(" [ ");
+        let lab = node_icon(n);
+        // control nodes have box shape
+        // other nodes are ellipses, i.e. default shape
+        if n.is_cfg() {
+            sb.push_str("shape=box style=filled fillcolor=yellow ");
         }
+        sb.push_str("label=\"");
+        sb.push_str(&lab);
+        sb.push_str("\" ");
+        sb.push_str("];\n");
     }
     sb.push_str("\t}\n");     // End Node cluster
 
     // Walk the Node edges
     sb.push_str("\tedge [ fontname=Helvetica, fontsize=8 ];\n");
-    let no_of_nodes = parser.graph.borrow().len();
-    for nid in 0..no_of_nodes {
-        if let Some(Some(n)) = parser.graph.borrow().get(nid) && nid != KEEP_ALIVE_NID {
-            // In this chapter we do display the Constant->Start edge;
-            for (i, def_nid) in n.inputs.iter().enumerate() {
-                //if (def != null) { TODO: currently we do NOT allow for Optionals in the inputs, which needs to be supported in the future.
-                if let Some(Some(def)) = parser.graph.borrow().get(*def_nid) {
-                    // Most edges land here use->def
-                    sb.push('\t');
-                    sb.push_str(&format!("Node_{}", nid));
-                    sb.push_str(" -> ");
-                    sb.push_str(&format!("Node_{}", def_nid));
-                    // Number edges, so we can see how they track
-                    sb.push_str("[taillabel=");
-                    sb.push_str(&format!("{}", i));
-                    if matches!(n.node_kind, NodeKind::Constant {..}) && matches!(def.node_kind, NodeKind::Start {..}) {
-                        sb.push_str(" style=dotted");
-                    } else if def.is_cfg() {   // control edges are colored red
-                        sb.push_str(" color=red");
-                    }
-                    sb.push_str("];\n");
+    for (nid, n) in iter_graph(&*parser.graph.borrow()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)).enumerate() {
+        // In this chapter we do display the Constant->Start edge;
+        for (i, def_nid) in n.inputs.iter().enumerate() {
+            //if (def != null) { TODO: currently we do NOT allow for Optionals in the inputs, which needs to be supported in the future.
+            if let Some(Some(def)) = parser.graph.borrow().get(*def_nid) {
+                // Most edges land here use->def
+                sb.push('\t');
+                sb.push_str(&format!("Node_{}", nid));
+                sb.push_str(" -> ");
+                sb.push_str(&format!("Node_{}", def_nid));
+                // Number edges, so we can see how they track
+                sb.push_str("[taillabel=");
+                sb.push_str(&format!("{}", i));
+                if matches!(n.node_kind, NodeKind::Constant {..}) && matches!(def.node_kind, NodeKind::Start {..}) {
+                    sb.push_str(" style=dotted");
+                } else if def.is_cfg() {   // control edges are colored red
+                    sb.push_str(" color=red");
                 }
+                sb.push_str("];\n");
             }
         }
     }
@@ -102,7 +97,7 @@ mod tests {
         dbg!(&dotfile);
 
         // Assert
-        assert_eq!(dotfile, "digraph mygraph{\n/*\n\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n}\n");
+        assert_eq!(dotfile, "digraph mygraph{\n/*\n\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_0 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n}\n");
     }
 
     #[test]
@@ -117,6 +112,6 @@ mod tests {
         dbg!(&dotfile);
 
         // Assert
-        assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_2 [ label=\"#1\" ];\n\t\tNode_3 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_3 -> Node_1[taillabel=0 color=red];\n\tNode_3 -> Node_2[taillabel=1];\n}\n");
+        assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_0 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_1 [ label=\"#1\" ];\n\t\tNode_2 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_2 -> Node_1[taillabel=0 color=red];\n\tNode_2 -> Node_2[taillabel=1];\n}\n");
     }
 }

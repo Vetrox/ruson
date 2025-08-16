@@ -183,6 +183,17 @@ pub fn remove_dependency(
     Ok(())
 }
 
+// let no_of_nodes = parser.graph.borrow().len();
+// for nid in 0..no_of_nodes {
+// if let Some(Some(n)) = parser.graph.borrow().get(nid) && nid != KEEP_ALIVE_NID {
+// }
+// }
+
+pub fn iter_graph(
+    graph: &Vec<Option<Node>>) -> impl Iterator<Item=&Node> {
+    graph.iter().filter_map(|x| x.as_ref())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc};
