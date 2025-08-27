@@ -19,11 +19,19 @@ $\mathrm{join}(a, b) = \mathrm{min} \left \lbrace e: a\leq e \wedge b \leq e \ri
 
 $\mathrm{meet}(a, b) = \mathrm{max} \left \lbrace e: e \leq a \wedge e \leq b \right \rbrace$
 
+$\mathrm{isA}(a, b) \Leftrightarrow \mathrm{meet}(a,b) = b$: Describes whether `a` is a subtype of `b` $\equiv$ `b` is a supertype of `a`.
+
 ## Examples
 
 $\mathrm{join}(\bot, \top) = \mathrm{min} \left \lbrace e: \bot \leq e \wedge \top \leq e \right \rbrace = \top$
 
 $\mathrm{meet}(\bot, \top) = \mathrm{max} \left \lbrace e: e \leq \bot \wedge e \leq \top \right \rbrace = \bot$
+
+# Intuition
+
+$\bot$ is treated as an unknown value. We have to honor what the programmer wrote and emit the code.
+
+$\top \equiv $ all possible choices (constants). We can choose any value, as convenient.
 
 # Optimization techniques
 

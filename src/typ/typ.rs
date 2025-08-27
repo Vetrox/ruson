@@ -1,8 +1,8 @@
 #[derive(Debug, Clone)]
 pub enum Typ {
-    /// ALL
+    /// ALL: We have to honor what the programmer wrote and emit the code.
     Bot,
-    /// ANY
+    /// ANY: We can choose any value, as convenient.
     Top,
     /// ALL integers
     Int { constant: i64 },
