@@ -1,3 +1,3 @@
 pub mod parser;
 mod lexer;
-mod dotvis;
+pub mod dotvis;
