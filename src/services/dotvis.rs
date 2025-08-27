@@ -127,4 +127,20 @@ mod tests {
         // Assert
         assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_2 [ label=\"#1\" ];\n\t\tNode_3 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_3 -> Node_1[taillabel=0 color=red];\n\tNode_3 -> Node_2[taillabel=1];\n}\n");
     }
+
+    #[test]
+    fn should_complex_dotfile() {
+        // Arrange
+        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+        parser.do_optimize = false;
+        parser.parse().unwrap();
+
+        // Act
+        let dotfile = as_dotfile(&parser);
+
+        dbg!(&dotfile);
+
+        // Assert
+        assert_eq!(dotfile, "digraph mygraph{\n/*\nreturn 1+2*3+-5;\n*/\n\trankdir=BT;\n\tordering=\"in\";\n\tconcentrate=\"true\";\n\tsubgraph cluster_Nodes {\n\t\tNode_1 [ shape=box style=filled fillcolor=yellow label=\"Start\" ];\n\t\tNode_2 [ label=\"#1\" ];\n\t\tNode_3 [ label=\"#2\" ];\n\t\tNode_4 [ label=\"#3\" ];\n\t\tNode_5 [ label=\"*\" ];\n\t\tNode_6 [ label=\"#5\" ];\n\t\tNode_7 [ label=\"-\" ];\n\t\tNode_8 [ label=\"+\" ];\n\t\tNode_9 [ label=\"+\" ];\n\t\tNode_10 [ shape=box style=filled fillcolor=yellow label=\"Return\" ];\n\t}\n\tedge [ fontname=Helvetica, fontsize=8 ];\n\tNode_5 -> Node_3[taillabel=0];\n\tNode_5 -> Node_4[taillabel=1];\n\tNode_7 -> Node_6[taillabel=0];\n\tNode_8 -> Node_5[taillabel=0];\n\tNode_8 -> Node_7[taillabel=1];\n\tNode_9 -> Node_2[taillabel=0];\n\tNode_9 -> Node_8[taillabel=1];\n\tNode_10 -> Node_1[taillabel=0 color=red];\n\tNode_10 -> Node_9[taillabel=1];\n}\n");
+    }
 }
