@@ -15,15 +15,15 @@ the [HotSpot JIT](https://github.com/openjdk/jdk/tree/master/src/hotspot/share/o
 
 $\bot \leq \mathcal{Int} \leq \top$
 
-$\mathrm{join}(a, b) = \mathrm{min} \left\{e: a\leq e \wedge b \leq e \right\}$
+$\mathrm{join}(a, b) = \mathrm{min} \left \lbrace e: a\leq e \wedge b \leq e \right \rbrace$
 
-$\mathrm{meet}(a, b) = \mathrm{max} \left\{e: e \leq a \wedge e \leq b \right\}$
+$\mathrm{meet}(a, b) = \mathrm{max} \left \lbrace e: e \leq a \wedge e \leq b \right \rbrace$
 
 ## Examples
 
-$\mathrm{join}(\bot, \top) = \mathrm{min} \left\{e: \bot \leq e \wedge \top \leq e \right\} = \top$
+$\mathrm{join}(\bot, \top) = \mathrm{min} \left \lbrace e: \bot \leq e \wedge \top \leq e \right \rbrace = \top$
 
-$\mathrm{meet}(\bot, \top) = \mathrm{max} \left\{e: e \leq \bot \wedge e \leq \top \right\} = \bot$
+$\mathrm{meet}(\bot, \top) = \mathrm{max} \left \lbrace e: e \leq \bot \wedge e \leq \top \right \rbrace = \bot$
 
 # Optimization techniques
 
