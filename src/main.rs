@@ -12,8 +12,5 @@ fn main() {
     let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
     parser.do_optimize = false;
     parser.parse().unwrap();
-
-    let dotfile = as_dotfile(&parser);
-
-    fs::write("target/output.dot", dotfile).expect("Unable to write file");
+    fs::write("target/output.dot", as_dotfile(&parser)).expect("Unable to write file");
 }
