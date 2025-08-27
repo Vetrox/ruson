@@ -28,7 +28,7 @@ jobs:
         run: dot target/output.dot -Tpng -o target/output.png
 
       - name: Upload output image artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: graphviz-image
           path: target/output.png
