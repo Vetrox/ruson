@@ -8,7 +8,7 @@ pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ
             let rhs = get_node(graph, *node.inputs.get(1).unwrap())?;
 
             if let Typ::Int { constant: clhs } = lhs.typ() && let Typ::Int { constant: crhs } = rhs.typ() {
-                return Ok(Typ::Int { constant: clhs + crhs });
+                return Ok(Typ::Int { constant: clhs + crhs }); // T_CONSTFLD
             }
             Ok(node.typ())
         }
@@ -17,7 +17,7 @@ pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ
             let rhs = get_node(graph, *node.inputs.get(1).unwrap())?;
 
             if let Typ::Int { constant: clhs } = lhs.typ() && let Typ::Int { constant: crhs } = rhs.typ() {
-                return Ok(Typ::Int { constant: clhs - crhs });
+                return Ok(Typ::Int { constant: clhs - crhs }); // T_CONSTFLD
             }
             Ok(node.typ())
         }
@@ -26,7 +26,7 @@ pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ
             let rhs = get_node(graph, *node.inputs.get(1).unwrap())?;
 
             if let Typ::Int { constant: clhs } = lhs.typ() && let Typ::Int { constant: crhs } = rhs.typ() {
-                return Ok(Typ::Int { constant: clhs * crhs });
+                return Ok(Typ::Int { constant: clhs * crhs }); // T_CONSTFLD
             }
             Ok(node.typ())
         }
@@ -35,7 +35,7 @@ pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ
             let rhs = get_node(graph, *node.inputs.get(1).unwrap())?;
 
             if let Typ::Int { constant: clhs } = lhs.typ() && let Typ::Int { constant: crhs } = rhs.typ() {
-                return Ok(Typ::Int { constant: clhs / crhs });
+                return Ok(Typ::Int { constant: clhs / crhs }); // T_CONSTFLD
             }
             Ok(node.typ())
         }
@@ -43,7 +43,7 @@ pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ
             let lhs = get_node(graph, *node.inputs.get(0).unwrap())?;
 
             if let Typ::Int { constant: clhs } = lhs.typ() {
-                return Ok(Typ::Int { constant: -clhs });
+                return Ok(Typ::Int { constant: -clhs }); // T_CONSTFLD
             }
             Ok(node.typ())
         }
