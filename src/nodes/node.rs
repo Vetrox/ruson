@@ -40,11 +40,11 @@ pub enum NodeKind {
 impl Display for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.node_kind {
-            NodeKind::Constant { value } => write!(f, "Constant({})", value)?,
+            NodeKind::Constant { value } => write!(f, "{}", value)?,
             NodeKind::Return => {
                 let data_nid = self.inputs.get(1).unwrap();
                 let node = self.graph.borrow_mut().get(*data_nid).unwrap().as_ref().unwrap().clone();
-                write!(f, "Return({})", format!("{}", node))?
+                write!(f, "return {};", format!("{}", node))?
             }
             NodeKind::Start => write!(f, "Start()")?,
             NodeKind::KeepAlive => write!(f, "KeepAlive()")?,
@@ -53,33 +53,33 @@ impl Display for Node {
                 let rhs = self.inputs.get(1).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "Add({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+                write!(f, "({}+{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Sub => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "Sub({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+                write!(f, "({}-{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Mul => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "Mul({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+                write!(f, "({}*{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Div => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "Div({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+                write!(f, "({}/{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Minus => {
                 let lhs = self.inputs.get(0).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "Minus({})", format!("{}", node_lhs))?
+                write!(f, "(-{})", format!("{}", node_lhs))?
             }
         }
         Ok(())

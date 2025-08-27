@@ -346,7 +346,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Add(Constant(1), Constant(1)))", format!("{:}", node));
+        assert_eq!("return (1+1);", format!("{:}", node));
     }
 
     #[test]
@@ -359,7 +359,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Sub(Constant(1), Constant(1)))", format!("{:}", node));
+        assert_eq!("return (1-1);", format!("{:}", node));
     }
 
     #[test]
@@ -372,7 +372,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Mul(Constant(1), Constant(1)))", format!("{:}", node));
+        assert_eq!("return (1*1);", format!("{:}", node));
     }
 
     #[test]
@@ -385,20 +385,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Div(Constant(1), Constant(1)))", format!("{:}", node));
-    }
-
-    #[test]
-    fn should_parse_add_and_mul() {
-        // Arrange
-        let mut parser = Parser::new("return 1+2*3;").unwrap();
-
-        // Act
-        let result = parser.parse().unwrap();
-
-        // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Add(Constant(1), Mul(Constant(2), Constant(3))))", format!("{:}", node));
+        assert_eq!("return (1/1);", format!("{:}", node));
     }
 
     #[test]
@@ -411,7 +398,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Add(Mul(Constant(1), Constant(2)), Constant(3)))", format!("{:}", node));
+        assert_eq!("return ((1*2)+3);", format!("{:}", node));
     }
 
     #[test]
@@ -424,6 +411,19 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("Return(Mul(Constant(1), Mul(Constant(2), Constant(3))))", format!("{:}", node));
+        assert_eq!("return (1*(2*3));", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_parse_complex_expression() {
+        // Arrange
+        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", node));
     }
 }
