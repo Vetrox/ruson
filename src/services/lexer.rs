@@ -191,7 +191,7 @@ mod tests {
         let mut lexer = Lexer::from_str("a123");
 
         // Act
-        lexer.parse_number();
+        let _ = lexer.parse_number();
     }
 
     #[test]

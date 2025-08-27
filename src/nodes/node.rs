@@ -1,6 +1,5 @@
 use crate::nodes::typ_refiner::compute_refined_typ;
 use crate::typ::typ::Typ;
-use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cell::RefCell, rc::Rc};
