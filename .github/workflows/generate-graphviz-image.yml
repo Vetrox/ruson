@@ -3,7 +3,7 @@ name: Generate Graphviz Image
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
   build_and_generate_image:
