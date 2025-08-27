@@ -1,3 +1,4 @@
+use crate::typ::typ::Typ;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,6 +17,7 @@ pub struct Node {
     /// unique id that is incremented with every new node
     pub uid: usize,
     pub nid: usize,
+    typ: Typ,
 }
 
 impl PartialEq for Node {
@@ -26,7 +28,7 @@ impl PartialEq for Node {
 
 #[derive(Debug, Clone)]
 pub enum NodeKind {
-    Constant { value: i64 },
+    Constant,
     Return,
     Start,
     KeepAlive,
@@ -40,7 +42,12 @@ pub enum NodeKind {
 impl Display for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self.node_kind {
-            NodeKind::Constant { value } => write!(f, "{}", value)?,
+            NodeKind::Constant => {
+                match self.typ() {
+                    Typ::Int { constant } => write!(f, "{}", constant)?,
+                    _ => panic!("Type {:?} for NodeKind::Constant unsupported", self.typ()),
+                }
+            }
             NodeKind::Return => {
                 let data_nid = self.inputs.get(1).unwrap();
                 let node = self.graph.borrow_mut().get(*data_nid).unwrap().as_ref().unwrap().clone();
@@ -91,6 +98,7 @@ pub enum SoNError {
     NodeIdNotExisting,
     NumberCannotStartWith0,
     SyntaxExpected { expected: String, actual: String },
+    TypTransitionNotAllowed,
 }
 
 impl Node {
@@ -98,9 +106,10 @@ impl Node {
         graph: Rc<RefCell<Vec<Option<Node>>>>,
         inputs: Vec<usize>,
         node_kind: NodeKind,
+        typ: Typ,
     ) -> Result<usize, SoNError> {
         let index = find_first_empty_cell(&graph);
-        let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index };
+        let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
         add_usage_for_deps(graph.clone(), index, &inputs_c)?;
         if index == graph.borrow().len() {
@@ -109,6 +118,19 @@ impl Node {
         graph.borrow_mut()[index] = Some(node);
         add_dependencies(graph.clone(), index, &inputs_c)?;
         Ok(index)
+    }
+
+    pub fn typ(&self) -> Typ {
+        self.typ.clone()
+    }
+
+    /// refines the typ of this node. Typ always moves upwards from BOT to TOP as we optimize.
+    pub fn refine_typ(&mut self, typ: Typ) -> Result<(), SoNError> {
+        if !self.typ.transition_allowed(&typ) {
+            return Err(SoNError::TypTransitionNotAllowed);
+        }
+        self.typ = typ;
+        Ok(())
     }
 
     /// returns whether this node is associated with the control flow graph
@@ -254,8 +276,8 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![]));
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Start).unwrap();
-        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Start, Typ::Bot).unwrap();
+        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start, Typ::Bot).unwrap();
 
         // Assert
         assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().outputs[0]);
@@ -268,10 +290,10 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![]));
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant { value: 42 }).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Int { constant: 42 }).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Constant { value: 42 }));
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().typ, Typ::Int { constant: 42 }));
     }
 
     #[test]
@@ -280,7 +302,7 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![]));
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
         assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
@@ -292,7 +314,7 @@ mod tests {
         let graph = Rc::new(RefCell::new(vec![None]));
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return).unwrap();
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
         assert_eq!(1, graph.borrow().len());

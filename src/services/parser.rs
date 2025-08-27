@@ -1,5 +1,7 @@
 use crate::nodes::node::{add_dependencies, add_usage_for_deps, peephole, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
+use crate::typ::typ::Typ;
+use crate::typ::typ::Typ::Bot;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -16,8 +18,8 @@ pub(crate) const CTRL_NID: usize = 1; // TODO: Introduce ScopeNode for this
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
         let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
-        Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive)?;
-        let ctrl = Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
+        Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive, Bot)?;
+        let ctrl = Node::new(ctx.graph.clone(), vec![], NodeKind::Start, Bot)?;
         assert_eq!(CTRL_NID, ctrl);
         ctx.keep_node(ctrl)?; // TODO: Introduce ScopeNode for this
         Ok(ctx)
@@ -67,9 +69,8 @@ impl Parser {
     fn drop_unused_nodes(&mut self) {
         self.drop_unused_nodes_cap(100);
     }
-
-    fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
-        let pr = format!("add_node inputs: {:?}, node_kind: {:?}", inputs, node_kind);
+    fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
+        let pr = format!("add_node inputs: {:?}, node_kind: {:?}, typ: {:?}", inputs, node_kind, typ);
         println!("{}", pr);
         for input in inputs.iter() {
             self.keep_node(*input)?;
@@ -78,7 +79,7 @@ impl Parser {
         for input in inputs.iter() {
             self.unkeep_node(*input)?;
         }
-        let mut node = Node::new(self.graph.clone(), inputs, node_kind)?;
+        let mut node = Node::new(self.graph.clone(), inputs, node_kind, typ)?;
         if self.do_optimize {
             node = peephole(self.graph.borrow_mut().as_mut(), node)?;
             self.keep_node(node)?;
@@ -86,6 +87,10 @@ impl Parser {
             self.unkeep_node(node)?;
         }
         Ok(node)
+    }
+
+    fn add_node_unrefined(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
+        self.add_node(inputs, node_kind, Bot)
     }
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
@@ -106,7 +111,7 @@ impl Parser {
     fn parse_return(&mut self) -> Result<usize, SoNError> {
         let primary = self.parse_expression()?;
         self.require(";")?;
-        let ret = self.add_node(vec![CTRL_NID, primary], NodeKind::Return);
+        let ret = self.add_node_unrefined(vec![CTRL_NID, primary], NodeKind::Return);
         ret
     }
 
@@ -141,13 +146,13 @@ impl Parser {
         if self.lexer.matsch("+") {
             return self.with_kept_node(lhs, |parser| {
                 let rhs = parser.parse_addition()?;
-                parser.add_node(vec![lhs, rhs], NodeKind::Add)
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Add)
             });
         }
         if self.lexer.matsch("-") {
             return self.with_kept_node(lhs, |parser| {
                 let rhs = parser.parse_addition()?;
-                parser.add_node(vec![lhs, rhs], NodeKind::Sub)
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Sub)
             });
         }
         Ok(lhs)
@@ -162,13 +167,13 @@ impl Parser {
         if self.lexer.matsch("*") {
             return self.with_kept_node(lhs, |parser| {
                 let rhs = parser.parse_multiplication()?;
-                parser.add_node(vec![lhs, rhs], NodeKind::Mul)
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Mul)
             });
         }
         if self.lexer.matsch("/") {
             return self.with_kept_node(lhs, |parser| {
                 let rhs = parser.parse_multiplication()?;
-                parser.add_node(vec![lhs, rhs], NodeKind::Div)
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Div)
             });
         }
         Ok(lhs)
@@ -180,7 +185,7 @@ impl Parser {
     fn parse_unary(&mut self) -> Result<usize, SoNError> {
         if self.lexer.matsch("-") {
             let unary = self.parse_unary()?;
-            self.add_node(vec![unary], NodeKind::Minus)
+            self.add_node_unrefined(vec![unary], NodeKind::Minus)
         } else {
             self.parse_primary()
         }
@@ -196,7 +201,7 @@ impl Parser {
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
         let value = self.lexer.parse_number()?;
-        self.add_node(vec![], NodeKind::Constant { value })
+        self.add_node(vec![], NodeKind::Constant, Typ::Int { constant: value })
     }
 
     /// require this syntax
@@ -218,6 +223,7 @@ impl Parser {
 mod tests {
     use crate::nodes::node::{node_exists_unique, NodeKind, SoNError};
     use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID};
+    use crate::typ::typ::Typ;
 
     #[test]
     fn should_be_able_to_create_new_parser() {
@@ -246,7 +252,7 @@ mod tests {
         match node.inputs.as_slice() {
             [CTRL_NID, x] => {
                 let dnode = g.get(*x).unwrap().as_ref().unwrap();
-                assert!(matches!(dnode.node_kind, NodeKind::Constant { value: 1 }));
+                assert!(matches!(dnode.typ(), Typ::Int { constant: 1 }));
                 assert!(matches!(dnode.outputs.as_slice(), [y] if y.eq(&result) ));
             }
             _ => assert!(false)
@@ -263,7 +269,7 @@ mod tests {
         parser.do_optimize = false;
 
         // Act
-        let result = parser.parse().unwrap();
+        let _result = parser.parse().unwrap();
         parser.drop_unused_nodes();
 
         // Assert
@@ -278,7 +284,7 @@ mod tests {
         parser.do_optimize = false;
 
         // Act
-        let result = parser.parse().unwrap();
+        let _result = parser.parse().unwrap();
         parser.drop_unused_nodes_cap(0);
 
         // Assert
@@ -292,7 +298,7 @@ mod tests {
         parser.do_optimize = false;
 
         // Act
-        let result = parser.parse().unwrap();
+        let _result = parser.parse().unwrap();
         parser.drop_unused_nodes_cap(1);
 
         // Assert
@@ -344,7 +350,7 @@ mod tests {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
         parser.do_optimize = false;
-        let nid = parser.add_node(vec![], NodeKind::Start).unwrap(); // this node is not kept
+        let nid = parser.add_node_unrefined(vec![], NodeKind::Start).unwrap(); // this node is not kept
 
         // Act
         let _result = parser.parse();

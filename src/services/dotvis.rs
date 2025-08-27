@@ -1,5 +1,6 @@
 use crate::nodes::node::{iter_graph, Node, NodeKind};
 use crate::services::parser::Parser;
+use crate::typ::typ::Typ;
 
 pub fn as_dotfile(parser: &Parser) -> String {
     let mut sb = String::new();
@@ -75,7 +76,12 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
 fn node_icon(node: &Node) -> String {
     match node.node_kind {
-        NodeKind::Constant { value } => format!("#{}", value),
+        NodeKind::Constant => {
+            match node.typ() {
+                Typ::Int { constant } => format!("#{}", constant),
+                _ => panic!("Type {:?} for NodeKind::Constant unsupported", node.typ()),
+            }
+        }
         NodeKind::Return => "Return".into(),
         NodeKind::Start => "Start".into(),
         NodeKind::KeepAlive => "KeepAlive".into(),
