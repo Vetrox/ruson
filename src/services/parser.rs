@@ -1,4 +1,4 @@
-use crate::nodes::node::{add_dependencies, add_usage_for_deps, peephole, remove_dependency, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies, add_usage_for_deps, get_node, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
@@ -79,15 +79,28 @@ impl Parser {
         for input in inputs.iter() {
             self.unkeep_node(*input)?;
         }
-        let mut node = Node::new(self.graph.clone(), inputs, node_kind, typ)?;
+        let mut nid = Node::new(self.graph.clone(), inputs, node_kind, typ)?;
         if self.do_optimize {
-            node = peephole(self.graph.borrow_mut().as_mut(), node)?;
-            self.keep_node(node)?;
+            nid = self.peephole(nid)?;
+            self.keep_node(nid)?;
             self.drop_unused_nodes();
-            self.unkeep_node(node)?;
+            self.unkeep_node(nid)?;
         }
-        Ok(node)
+        Ok(nid)
     }
+
+    /// Possibly creates a new node that this node needs to be replaced with.
+    /// The caller can just use the returned nid instead of the input nid.
+    fn peephole(&mut self,
+                mut nid: usize) -> Result<usize, SoNError> {
+        let node = get_node(self.graph.borrow().as_ref(), nid)?.clone();
+        if node.typ().is_constant() && !matches!(node.node_kind, NodeKind::Constant) {
+            assert!(node.outputs.is_empty()); // otherwise it won't get gc-collected
+            nid = self.add_node(vec![], NodeKind::Constant, node.typ())?;
+        }
+        Ok(nid)
+    }
+
 
     fn add_node_unrefined(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
         self.add_node(inputs, node_kind, Bot)
@@ -455,5 +468,18 @@ mod tests {
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_peephole_computed_types() {
+        // Arrange
+        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("return 2;", format!("{:}", node));
     }
 }

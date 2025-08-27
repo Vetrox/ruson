@@ -1,3 +1,4 @@
+use crate::nodes::typ_refiner::compute_refined_typ;
 use crate::typ::typ::Typ;
 use itertools::Itertools;
 use std::fmt::{Display, Formatter};
@@ -115,8 +116,17 @@ impl Node {
         if index == graph.borrow().len() {
             graph.borrow_mut().push(None);
         }
-        graph.borrow_mut()[index] = Some(node);
+        graph.borrow_mut()[index] = Some(node.clone());
         add_dependencies(graph.clone(), index, &inputs_c)?;
+
+        // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
+        let graph_br = graph.borrow();
+        let n = get_node(graph_br.as_ref(), index)?;
+        let typ = compute_refined_typ(&*graph.borrow(), n)?;
+        drop(graph_br);
+        let mut graph_br = graph.borrow_mut();
+        get_node_mut(graph_br.as_mut(), index)?.refine_typ(typ)?;
+
         Ok(index)
     }
 
@@ -129,6 +139,7 @@ impl Node {
         if !self.typ.transition_allowed(&typ) {
             return Err(SoNError::TypTransitionNotAllowed);
         }
+        println!("Node {:?} node_kind: {:?}, typ: {:?} -> {:?}", self.nid, self.node_kind, self.typ, typ);
         self.typ = typ;
         Ok(())
     }
@@ -256,12 +267,6 @@ pub fn iter_graph(
 pub fn iter_graph_mut(
     graph: &mut Vec<Option<Node>>) -> impl Iterator<Item=&Node> {
     graph.iter_mut().filter_map(|x| x.as_ref())
-}
-
-pub fn peephole(
-    graph: &mut Vec<Option<Node>>,
-    nid: usize) -> Result<usize, SoNError> {
-    todo!()
 }
 
 #[cfg(test)]

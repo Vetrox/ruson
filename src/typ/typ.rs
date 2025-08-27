@@ -14,7 +14,7 @@ impl Typ {
     }
 
     pub fn is_constant(&self) -> bool {
-        matches!(self, Typ::Top)
+        matches!(self, Typ::Top | Typ::Int { .. })
     }
 
     /// TODO: really think about allowed transitions.
