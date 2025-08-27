@@ -1,4 +1,4 @@
-use crate::nodes::node::{add_dependencies, add_usage_for_deps, remove_dependency, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies, add_usage_for_deps, peephole, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -6,6 +6,8 @@ use std::rc::Rc;
 pub struct Parser {
     lexer: Lexer,
     pub graph: Rc<RefCell<Vec<Option<Node>>>>,
+    /// peephole optimization
+    pub do_optimize: bool,
 }
 
 pub(crate) const KEEP_ALIVE_NID: usize = 0;
@@ -13,7 +15,7 @@ pub(crate) const CTRL_NID: usize = 1; // TODO: Introduce ScopeNode for this
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])) };
+        let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
         Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive)?;
         let ctrl = Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
         assert_eq!(CTRL_NID, ctrl);
@@ -76,7 +78,14 @@ impl Parser {
         for input in inputs.iter() {
             self.unkeep_node(*input)?;
         }
-        Node::new(self.graph.clone(), inputs, node_kind)
+        let mut node = Node::new(self.graph.clone(), inputs, node_kind)?;
+        if self.do_optimize {
+            node = peephole(self.graph.borrow_mut().as_mut(), node)?;
+            self.keep_node(node)?;
+            self.drop_unused_nodes();
+            self.unkeep_node(node)?;
+        }
+        Ok(node)
     }
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
@@ -224,6 +233,7 @@ mod tests {
     fn should_parse_return() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -250,6 +260,7 @@ mod tests {
     fn should_drop_unused_nodes_but_never_the_keepalive_node() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -264,6 +275,7 @@ mod tests {
     fn should_not_drop_any_node_when_cap_is_0() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -277,6 +289,7 @@ mod tests {
     fn should_only_drop_one_node_when_cap_is_1() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -291,6 +304,7 @@ mod tests {
     fn should_fail_when_invalid_syntax_is_used() {
         // Arrange
         let mut parser = Parser::new("ret 1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse();
@@ -303,6 +317,7 @@ mod tests {
     fn should_check_for_semicolon() {
         // Arrange
         let mut parser = Parser::new("return 1").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse();
@@ -315,6 +330,7 @@ mod tests {
     fn should_fail_at_brace() {
         // Arrange
         let mut parser = Parser::new("return 1;}").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse();
@@ -327,6 +343,7 @@ mod tests {
     fn should_delete_nodes_that_arent_kept_alive() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
         let nid = parser.add_node(vec![], NodeKind::Start).unwrap(); // this node is not kept
 
         // Act
@@ -340,6 +357,7 @@ mod tests {
     fn should_parse_one_plus_one() {
         // Arrange
         let mut parser = Parser::new("return 1+1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -353,6 +371,7 @@ mod tests {
     fn should_parse_one_minus_one() {
         // Arrange
         let mut parser = Parser::new("return 1-1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -366,6 +385,7 @@ mod tests {
     fn should_parse_one_times_one() {
         // Arrange
         let mut parser = Parser::new("return 1*1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -379,6 +399,7 @@ mod tests {
     fn should_parse_one_div_one() {
         // Arrange
         let mut parser = Parser::new("return 1/1;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -392,6 +413,7 @@ mod tests {
     fn should_parse_mul_and_add() {
         // Arrange
         let mut parser = Parser::new("return 1*2+3;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -405,6 +427,7 @@ mod tests {
     fn should_parse_mul_and_mul() {
         // Arrange
         let mut parser = Parser::new("return 1*2*3;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();
@@ -418,6 +441,7 @@ mod tests {
     fn should_parse_complex_expression() {
         // Arrange
         let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+        parser.do_optimize = false;
 
         // Act
         let result = parser.parse().unwrap();

@@ -236,6 +236,12 @@ pub fn iter_graph_mut(
     graph.iter_mut().filter_map(|x| x.as_ref())
 }
 
+pub fn peephole(
+    graph: &mut Vec<Option<Node>>,
+    nid: usize) -> Result<usize, SoNError> {
+    todo!()
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc};

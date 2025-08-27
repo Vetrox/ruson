@@ -110,6 +110,7 @@ mod tests {
     fn should_output_return_1_dotfile() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
+        parser.do_optimize = false;
         parser.parse().unwrap();
 
         // Act
