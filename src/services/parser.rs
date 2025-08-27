@@ -104,7 +104,51 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Result<usize, SoNError> {
-        self.parse_primary()
+        self.parse_addition()
+    }
+
+    /// <pre>
+    /// additiveExpr : multiplicativeExpr (('+' | '-') additiveExpr)*
+    /// </pre>
+    fn parse_addition(&mut self) -> Result<usize, SoNError> {
+        let lhs = self.parse_multiplication()?;
+        if self.lexer.matschx("+") {
+            let rhs = self.parse_addition()?;
+            return self.add_node(vec![lhs, rhs], NodeKind::Add);
+        }
+        if self.lexer.matschx("-") {
+            let rhs = self.parse_addition()?;
+            return self.add_node(vec![lhs, rhs], NodeKind::Sub);
+        }
+        Ok(lhs)
+    }
+
+    /// <pre>
+    /// multiplicativeExpr : unaryExpr (('*' | '/') multiplicativeExpr)*
+    /// </pre>
+    fn parse_multiplication(&mut self) -> Result<usize, SoNError> {
+        let lhs = self.parse_unary()?;
+        if (self.lexer.matschx("*")) {
+            let rhs = self.parse_multiplication()?;
+            return self.add_node(vec![lhs, rhs], NodeKind::Mul);
+        }
+        if self.lexer.matschx("/") {
+            let rhs = self.parse_multiplication()?;
+            return self.add_node(vec![lhs, rhs], NodeKind::Div);
+        }
+        Ok(lhs)
+    }
+
+    /// <pre>
+    /// unaryExpr : ('-') unaryExpr | primaryExpr
+    /// </pre>
+    fn parse_unary(&mut self) -> Result<usize, SoNError> {
+        if self.lexer.matschx("-") {
+            let unary = self.parse_unary()?;
+            self.add_node(vec![unary], NodeKind::Minus)
+        } else {
+            self.parse_primary()
+        }
     }
 
     fn parse_primary(&mut self) -> Result<usize, SoNError> {
@@ -117,7 +161,7 @@ impl Parser {
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
         let value = self.lexer.parse_number()?;
-        Ok(self.add_node(vec![], NodeKind::Constant { value })?)
+        self.add_node(vec![], NodeKind::Constant { value })
     }
 
     /// require this syntax
@@ -254,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn shoulld_delete_nodes_that_arent_kept_alive() {
+    fn should_delete_nodes_that_arent_kept_alive() {
         // Arrange
         let mut parser = Parser::new("return 1;").unwrap();
         let nid = parser.add_node(vec![], NodeKind::Start).unwrap(); // this node is not kept

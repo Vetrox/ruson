@@ -79,6 +79,11 @@ fn node_icon(node: &Node) -> String {
         NodeKind::Return => "Return".into(),
         NodeKind::Start => "Start".into(),
         NodeKind::KeepAlive => "KeepAlive".into(),
+        NodeKind::Add => "+".into(),
+        NodeKind::Sub => "-".into(),
+        NodeKind::Mul => "*".into(),
+        NodeKind::Div => "/".into(),
+        NodeKind::Minus => "-".into(),
     }
 }
 

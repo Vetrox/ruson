@@ -29,7 +29,12 @@ pub enum NodeKind {
     Constant { value: i64 },
     Return,
     Start,
-    KeepAlive
+    KeepAlive,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Minus
 }
 
 impl Display for Node {
@@ -43,6 +48,11 @@ impl Display for Node {
             }
             NodeKind::Start => write!(f, "Start()")?,
             NodeKind::KeepAlive => write!(f, "KeepAlive()")?,
+            NodeKind::Add => write!(f, "Add()")?,
+            NodeKind::Sub => write!(f, "Sub()")?,
+            NodeKind::Mul => write!(f, "Mul()")?,
+            NodeKind::Div => write!(f, "Div()")?,
+            NodeKind::Minus => write!(f, "Minus()")?,
         }
         Ok(())
     }
