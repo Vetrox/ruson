@@ -15,8 +15,9 @@ impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
         let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])) };
         Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive)?;
-        Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
-        ctx.keep_node(CTRL_NID)?; // TODO: Introduce ScopeNode for this
+        let ctrl = Node::new(ctx.graph.clone(), vec![], NodeKind::Start)?;
+        assert_eq!(CTRL_NID, ctrl);
+        ctx.keep_node(ctrl)?; // TODO: Introduce ScopeNode for this
         Ok(ctx)
     }
 
@@ -66,7 +67,15 @@ impl Parser {
     }
 
     fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
+        let pr = format!("add_node inputs: {:?}, node_kind: {:?}", inputs, node_kind);
+        println!("{}", pr);
+        for input in inputs.iter() {
+            self.keep_node(*input)?;
+        }
         self.drop_unused_nodes();
+        for input in inputs.iter() {
+            self.unkeep_node(*input)?;
+        }
         Node::new(self.graph.clone(), inputs, node_kind)
     }
 
@@ -87,10 +96,8 @@ impl Parser {
 
     fn parse_return(&mut self) -> Result<usize, SoNError> {
         let primary = self.parse_expression()?;
-        self.keep_node(primary)?;
         self.require(";")?;
         let ret = self.add_node(vec![CTRL_NID, primary], NodeKind::Return);
-        self.unkeep_node(primary)?;
         ret
     }
 
@@ -112,12 +119,16 @@ impl Parser {
     /// </pre>
     fn parse_addition(&mut self) -> Result<usize, SoNError> {
         let lhs = self.parse_multiplication()?;
-        if self.lexer.matschx("+") {
+        if self.lexer.matsch("+") {
+            self.keep_node(lhs)?;
             let rhs = self.parse_addition()?;
+            self.unkeep_node(lhs)?;
             return self.add_node(vec![lhs, rhs], NodeKind::Add);
         }
-        if self.lexer.matschx("-") {
+        if self.lexer.matsch("-") {
+            self.unkeep_node(lhs)?;
             let rhs = self.parse_addition()?;
+            self.unkeep_node(lhs)?;
             return self.add_node(vec![lhs, rhs], NodeKind::Sub);
         }
         Ok(lhs)
@@ -128,12 +139,16 @@ impl Parser {
     /// </pre>
     fn parse_multiplication(&mut self) -> Result<usize, SoNError> {
         let lhs = self.parse_unary()?;
-        if (self.lexer.matschx("*")) {
+        if self.lexer.matsch("*") {
+            self.keep_node(lhs)?;
             let rhs = self.parse_multiplication()?;
+            self.unkeep_node(lhs)?;
             return self.add_node(vec![lhs, rhs], NodeKind::Mul);
         }
-        if self.lexer.matschx("/") {
+        if self.lexer.matsch("/") {
+            self.keep_node(lhs)?;
             let rhs = self.parse_multiplication()?;
+            self.unkeep_node(lhs)?;
             return self.add_node(vec![lhs, rhs], NodeKind::Div);
         }
         Ok(lhs)
@@ -143,7 +158,7 @@ impl Parser {
     /// unaryExpr : ('-') unaryExpr | primaryExpr
     /// </pre>
     fn parse_unary(&mut self) -> Result<usize, SoNError> {
-        if self.lexer.matschx("-") {
+        if self.lexer.matsch("-") {
             let unary = self.parse_unary()?;
             self.add_node(vec![unary], NodeKind::Minus)
         } else {
@@ -308,5 +323,70 @@ mod tests {
 
         // Assert
         assert!(!node_exists_unique(&parser.graph.borrow(), nid, nid));
+    }
+
+    #[test]
+    fn should_parse_one_plus_one() {
+        // Arrange
+        let mut parser = Parser::new("return 1+1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("Return(Add(Constant(1), Constant(1)))", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_parse_one_minus_one() {
+        // Arrange
+        let mut parser = Parser::new("return 1-1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("Return(Sub(Constant(1), Constant(1)))", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_parse_one_times_one() {
+        // Arrange
+        let mut parser = Parser::new("return 1*1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("Return(Mul(Constant(1), Constant(1)))", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_parse_one_div_one() {
+        // Arrange
+        let mut parser = Parser::new("return 1/1;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("Return(Div(Constant(1), Constant(1)))", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_parse_add_and_mul_one() {
+        // Arrange
+        let mut parser = Parser::new("return 1+2*3;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("Return(Add(Constant(1), Mul(Constant(2), Constant(3))))", format!("{:}", node));
     }
 }

@@ -1,8 +1,18 @@
 use crate::nodes::node::SoNError;
+use std::fmt::{Display, Formatter};
 
 pub struct Lexer {
     pub input: String,
     position: usize,
+}
+
+impl Display for Lexer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.input.get(self.position..) {
+            Some(slice) => write!(f, "{}", slice),
+            None => write!(f, "<invalid position>"),
+        }
+    }
 }
 
 impl Lexer {

@@ -48,11 +48,39 @@ impl Display for Node {
             }
             NodeKind::Start => write!(f, "Start()")?,
             NodeKind::KeepAlive => write!(f, "KeepAlive()")?,
-            NodeKind::Add => write!(f, "Add()")?,
-            NodeKind::Sub => write!(f, "Sub()")?,
-            NodeKind::Mul => write!(f, "Mul()")?,
-            NodeKind::Div => write!(f, "Div()")?,
-            NodeKind::Minus => write!(f, "Minus()")?,
+            NodeKind::Add => {
+                let lhs = self.inputs.get(0).unwrap();
+                let rhs = self.inputs.get(1).unwrap();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
+                write!(f, "Add({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+            }
+            NodeKind::Sub => {
+                let lhs = self.inputs.get(0).unwrap();
+                let rhs = self.inputs.get(1).unwrap();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
+                write!(f, "Sub({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+            }
+            NodeKind::Mul => {
+                let lhs = self.inputs.get(0).unwrap();
+                let rhs = self.inputs.get(1).unwrap();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
+                write!(f, "Mul({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+            }
+            NodeKind::Div => {
+                let lhs = self.inputs.get(0).unwrap();
+                let rhs = self.inputs.get(1).unwrap();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
+                write!(f, "Div({}, {})", format!("{}", node_lhs), format!("{}", node_rhs))?
+            }
+            NodeKind::Minus => {
+                let lhs = self.inputs.get(0).unwrap();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                write!(f, "Minus({})", format!("{}", node_lhs))?
+            }
         }
         Ok(())
     }
@@ -116,7 +144,7 @@ pub fn add_usage_for_deps(
         match graph_br.get_mut(*id) {
             Some(Some(def)) => {
                 def.outputs.push(nid);
-                def.outputs = def.outputs.clone().into_iter().unique().collect();
+                // def.outputs = def.outputs.clone().into_iter().unique().collect();
             }
             _ => return Err(SoNError::NodeIdNotExisting),
         }
@@ -170,7 +198,7 @@ pub fn add_dependencies(
     match graph_br.get_mut(nid) {
         Some(Some(node)) => {
             node.inputs.extend(deps);
-            node.inputs = node.inputs.clone().into_iter().unique().collect();
+            // node.inputs = node.inputs.clone().into_iter().unique().collect();
         },
         _ => return Err(SoNError::NodeIdNotExisting),
     };
@@ -189,8 +217,12 @@ pub fn remove_dependency(
         return Err(SoNError::NodeIdNotExisting);
     }
 
-    get_node_mut(&mut graph_br, nid)?.inputs.retain(|&x| x != dep_nid);
-    get_node_mut(&mut graph_br, dep_nid)?.outputs.retain(|&x| x != nid);
+    if let Some(pos) = get_node_mut(&mut graph_br, nid)?.inputs.iter().position(|&x| x == dep_nid) {
+        get_node_mut(&mut graph_br, nid)?.inputs.remove(pos);
+    }
+    if let Some(pos) = get_node_mut(&mut graph_br, dep_nid)?.outputs.iter().position(|&x| x == nid) {
+        get_node_mut(&mut graph_br, dep_nid)?.outputs.remove(pos);
+    }
     Ok(())
 }
 
