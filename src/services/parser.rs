@@ -96,7 +96,7 @@ impl Parser {
         let node = get_node(self.graph.borrow().as_ref(), nid)?.clone();
         if node.typ().is_constant() && !matches!(node.node_kind, NodeKind::Constant) {
             assert!(node.outputs.is_empty()); // otherwise it won't get gc-collected
-            nid = self.add_node(vec![], NodeKind::Constant, node.typ())?;
+            nid = self.add_node(vec![], NodeKind::Constant, node.typ())?; // T_CONSTPROP
         }
         Ok(nid)
     }
