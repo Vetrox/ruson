@@ -1,8 +1,6 @@
 pub(crate) use crate::nodes::graph::Graph;
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
-use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cell::RefCell, rc::Rc};
 
@@ -11,8 +9,6 @@ static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Node {
-    /// for Display trait we need to be able to traverse the whole graph.
-    graph: Rc<RefCell<Graph>>,
     pub node_kind: NodeKind,
     /// ordered list of def`s this Node is depending on
     pub inputs: Vec<usize>,
@@ -43,80 +39,6 @@ pub enum NodeKind {
     Scope { scopes: Vec<HashMap<String, usize>> },
 }
 
-impl Display for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.clone().node_kind {
-            NodeKind::Constant => {
-                match self.typ() {
-                    Typ::Int { constant } => write!(f, "{}", constant)?,
-                    _ => panic!("Type {:?} for NodeKind::Constant unsupported", self.typ()),
-                }
-            }
-            NodeKind::Return => {
-                let data_nid = self.inputs.get(1).unwrap();
-                let node = self.graph.borrow_mut().get(*data_nid).unwrap().as_ref().unwrap().clone();
-                write!(f, "return {};", format!("{}", node))?
-            }
-            NodeKind::Start => write!(f, "Start()")?,
-            NodeKind::KeepAlive => write!(f, "KeepAlive()")?,
-            NodeKind::Add => {
-                let lhs = self.inputs.get(0).unwrap();
-                let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "({}+{})", format!("{}", node_lhs), format!("{}", node_rhs))?
-            }
-            NodeKind::Sub => {
-                let lhs = self.inputs.get(0).unwrap();
-                let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "({}-{})", format!("{}", node_lhs), format!("{}", node_rhs))?
-            }
-            NodeKind::Mul => {
-                let lhs = self.inputs.get(0).unwrap();
-                let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "({}*{})", format!("{}", node_lhs), format!("{}", node_rhs))?
-            }
-            NodeKind::Div => {
-                let lhs = self.inputs.get(0).unwrap();
-                let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "({}/{})", format!("{}", node_lhs), format!("{}", node_rhs))?
-            }
-            NodeKind::Minus => {
-                let lhs = self.inputs.get(0).unwrap();
-                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
-                write!(f, "(-{})", format!("{}", node_lhs))?
-            },
-            NodeKind::Scope { scopes } => {
-                write!(f, "Scope(")?;
-                for scope in scopes {
-                    let mut entries: Vec<_> = scope.iter().collect();
-                    entries.sort_by_key(|&(k, _)| k);
-
-                    write!(f, "[")?;
-                    let mut first = true;
-                    for (k, v) in entries {
-                        if !(first) {
-                            write!(f, ", ")?;
-                        }
-                        first = false;
-                        let node_lhs = self.graph.borrow().get(*v).unwrap().as_ref().unwrap().clone();
-                        write!(f, "{}: {}", k, format!("{}", node_lhs))?;
-                    }
-                    write!(f, "]")?;
-                }
-                write!(f, ")")?;
-            }
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug)]
 pub enum SoNError {
     NodeIdNotExisting,
@@ -136,7 +58,7 @@ impl Node {
     ) -> Result<usize, SoNError> {
         let mut graph_br = graph.borrow_mut();
         let index = graph_br.find_first_empty_cell();
-        let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
+        let node = Node { node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
         graph_br.add_reverse_dependencies_br(index, &inputs_c)?;
         if index == graph_br.len() {

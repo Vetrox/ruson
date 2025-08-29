@@ -412,6 +412,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use crate::nodes::bound_node::BoundNode;
     use crate::nodes::node::{NodeKind, SoNError};
     use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID, SCOPE_NID};
     use crate::typ::typ::Typ;
@@ -450,7 +451,7 @@ mod tests {
         }
         let my_node = node.clone();
         drop(graph_br);
-        println!("Parsing result is: {}", my_node);
+        println!("Parsing result is: {}", format!("{:}", BoundNode::new(&my_node, parser.graph)));
     }
 
     #[test]
@@ -561,7 +562,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1+1);", format!("{:}", node));
+        assert_eq!("return (1+1);", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -575,7 +576,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1-1);", format!("{:}", node));
+        assert_eq!("return (1-1);", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -589,7 +590,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1*1);", format!("{:}", node));
+        assert_eq!("return (1*1);", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -603,7 +604,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1/1);", format!("{:}", node));
+        assert_eq!("return (1/1);", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -617,7 +618,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return ((1*2)+3);", format!("{:}", node));
+        assert_eq!("return ((1*2)+3);", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -631,7 +632,7 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1*(2*3));", format!("{:}", node));
+        assert_eq!("return (1*(2*3));", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -644,8 +645,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", node));
+        let node = parser.graph.borrow().get_node(result).unwrap().clone();
+        assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -657,8 +658,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return 2;", format!("{:}", node));
+        let node = parser.graph.borrow().get_node(result).unwrap().clone();
+        assert_eq!("return 2;", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 
     #[test]
@@ -694,6 +695,6 @@ mod tests {
 
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return 1;", format!("{:}", node));
+        assert_eq!("return 1;", format!("{:}", BoundNode::new(&node, parser.graph)));
     }
 }
