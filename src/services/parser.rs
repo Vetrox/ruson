@@ -89,7 +89,7 @@ impl Parser {
 
     /// a.k.a. garbage collect for the java stans
     fn drop_unused_nodes_cap(&mut self, cap: usize) {
-        let len = self.graph.borrow().g.len();
+        let len = self.graph.borrow().len();
         for nid in 0..len {
             self.attempt_drop_node(nid, cap);
         }
@@ -102,23 +102,23 @@ impl Parser {
         if cap <= 0 {
             return 0;
         }
-        let inputs = self.graph.borrow_mut().g.get(nid).map(|n| match n.as_ref() {
+        let inputs = self.graph.borrow_mut().get(nid).map(|n| match n.as_ref() {
             Some(node) if node.outputs.is_empty() => node.inputs.clone(),
             _ => vec![]
         });
         let mut c = cap;
         if let Some(inputs) = inputs {
             for neigh in inputs.into_iter() {
-                if let Some(Some(n)) = self.graph.borrow_mut().g.get_mut(neigh) {
+                if let Some(Some(n)) = self.graph.borrow_mut().get_mut(neigh) {
                     n.outputs.retain(|&k| k != nid);
                 }
                 c -= self.attempt_drop_node(neigh, c);
             }
         }
         if c > 0 {
-            if matches!(self.graph.borrow_mut().g.get_mut(nid), Some(Some(n)) if n.outputs.is_empty()) {
+            if matches!(self.graph.borrow_mut().get_mut(nid), Some(Some(n)) if n.outputs.is_empty()) {
                 c -= 1;
-                *self.graph.borrow_mut().g.get_mut(nid).unwrap() = None;
+                *self.graph.borrow_mut().get_mut(nid).unwrap() = None;
             };
         }
         cap - c
@@ -422,8 +422,8 @@ mod tests {
         let parser = Parser::new("return 1;").unwrap();
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().g.len());
-        assert!(matches!( parser.graph.borrow_mut().g.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(3, parser.graph.borrow().len());
+        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -437,12 +437,12 @@ mod tests {
 
         // Assert
         let graph_br = parser.graph.borrow_mut();
-        let node = graph_br.g.get(result).unwrap().as_ref().unwrap();
+        let node = graph_br.get(result).unwrap().as_ref().unwrap();
         assert!(matches!(node.node_kind, NodeKind::Return));
         assert!(matches!(node.outputs.as_slice(), []));
         match node.inputs.as_slice() {
             [CTRL_NID, x] => {
-                let dnode = graph_br.g.get(*x).unwrap().as_ref().unwrap();
+                let dnode = graph_br.get(*x).unwrap().as_ref().unwrap();
                 assert!(matches!(dnode.typ(), Typ::Int { constant: 1 }));
                 assert!(matches!(dnode.outputs.as_slice(), [y] if y.eq(&result) ));
             }
@@ -464,8 +464,8 @@ mod tests {
         parser.drop_unused_nodes();
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().g.get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
+        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
     #[test]
@@ -479,7 +479,7 @@ mod tests {
         parser.drop_unused_nodes_cap(0);
 
         // Assert
-        assert_eq!(5, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
+        assert_eq!(5, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
     }
 
     #[test]
@@ -493,8 +493,8 @@ mod tests {
         parser.drop_unused_nodes_cap(1);
 
         // Assert
-        assert_eq!(4, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().g.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(4, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -560,7 +560,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1+1);", format!("{:}", node));
     }
 
@@ -574,7 +574,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1-1);", format!("{:}", node));
     }
 
@@ -588,7 +588,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1*1);", format!("{:}", node));
     }
 
@@ -602,7 +602,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1/1);", format!("{:}", node));
     }
 
@@ -616,7 +616,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return ((1*2)+3);", format!("{:}", node));
     }
 
@@ -630,7 +630,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1*(2*3));", format!("{:}", node));
     }
 
@@ -644,7 +644,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", node));
     }
 
@@ -657,7 +657,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return 2;", format!("{:}", node));
     }
 
@@ -693,7 +693,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return 1;", format!("{:}", node));
     }
 }

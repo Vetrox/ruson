@@ -30,7 +30,7 @@ pub fn as_dotfile(parser: &Parser) -> String {
     let graph_br = parser.graph.borrow();
 
     // define normal nodes
-    for n in graph_br.iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
+    for n in graph_br.graph_iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         sb.push_str("\t\t");
         sb.push_str(&format!("Node_{}", n.nid));
         sb.push_str(" [ ");
@@ -75,10 +75,10 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
     // Walk the Node edges
     sb.push_str("\tedge [ fontname=Helvetica, fontsize=8 ];\n");
-    for n in graph_br.iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
+    for n in graph_br.graph_iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         // In this chapter we do display the Constant->Start edge;
         for (i, def_nid) in n.inputs.iter().enumerate() {
-            if let Some(Some(def)) = graph_br.g.get(*def_nid) {
+            if let Some(Some(def)) = graph_br.get(*def_nid) {
                 // Most edges land here use->def
                 sb.push('\t');
                 sb.push_str(&format!("Node_{}", n.nid));

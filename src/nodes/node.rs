@@ -1,6 +1,7 @@
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cell::RefCell, rc::Rc};
 
@@ -9,24 +10,39 @@ static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Graph {
-    pub g: Vec<Option<Node>>,
+    m_graph: Vec<Option<Node>>,
+}
+
+impl Deref for Graph {
+    type Target = Vec<Option<Node>>;
+    fn deref(&self) -> &Self::Target {
+        &self.m_graph
+    }
+}
+
+impl DerefMut for Graph {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.m_graph
+    }
 }
 
 impl Graph {
-    pub fn new() -> Graph {
-        Graph { g: vec![] }
-    }
-
     pub fn from(g: Vec<Option<Node>>) -> Graph {
-        Graph { g }
+        Graph { m_graph: g }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&Node> {
-        self.g.iter().filter_map(|x| x.as_ref())
+    pub fn new() -> Graph {
+        Self::from(vec![])
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&Node> {
-        self.g.iter_mut().filter_map(|x| x.as_ref())
+    /// automatically filters for None elements
+    pub fn graph_iter(&self) -> impl Iterator<Item=&Node> {
+        self.iter().filter_map(|x| x.as_ref())
+    }
+
+    /// automatically filters for None elements
+    pub fn graph_iter_mut(&mut self) -> impl Iterator<Item=&Node> {
+        self.iter_mut().filter_map(|x| x.as_ref())
     }
 
     /// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
@@ -49,7 +65,7 @@ impl Graph {
     /// make the usages for all nodes in deps to point to nid
     pub fn add_reverse_dependencies_br(&mut self, nid: usize, deps: &Vec<usize>) -> Result<(), SoNError> {
         for id in deps {
-            match self.g.get_mut(*id) {
+            match self.get_mut(*id) {
                 Some(Some(def)) => {
                     def.outputs.push(nid);
                     // def.outputs = def.outputs.clone().into_iter().unique().collect();
@@ -62,7 +78,7 @@ impl Graph {
 
     /// adds the dependencies for a node
     pub fn add_dependencies_br(&mut self, nid: usize, deps: &Vec<usize>) -> Result<(), SoNError> {
-        match self.g.get_mut(nid) {
+        match self.get_mut(nid) {
             Some(Some(node)) => {
                 node.inputs.extend(deps);
                 // node.inputs = node.inputs.clone().into_iter().unique().collect();
@@ -73,24 +89,24 @@ impl Graph {
     }
 
     pub fn find_first_empty_cell(&mut self) -> usize {
-        let index = self.g.iter().enumerate().find_map(|(i, x)| {
+        let index = self.iter().enumerate().find_map(|(i, x)| {
             if x.is_none() {
                 Some(i)
             } else {
                 None
             }
-        }).unwrap_or_else(|| self.g.len());
+        }).unwrap_or_else(|| self.len());
         index
     }
 
     pub fn get_node_mut(&mut self, nid: usize) -> Result<&mut Node, SoNError> {
-        self.g.get_mut(nid)
+        self.get_mut(nid)
             .and_then(|n| n.as_mut())
             .ok_or(SoNError::NodeIdNotExisting)
     }
 
     pub fn get_node(&self, nid: usize) -> Result<&Node, SoNError> {
-        self.g.get(nid)
+        self.get(nid)
             .and_then(|n| n.as_ref())
             .ok_or(SoNError::NodeIdNotExisting)
     }
@@ -151,7 +167,7 @@ impl Display for Node {
             }
             NodeKind::Return => {
                 let data_nid = self.inputs.get(1).unwrap();
-                let node = self.graph.borrow_mut().g.get(*data_nid).unwrap().as_ref().unwrap().clone();
+                let node = self.graph.borrow_mut().get(*data_nid).unwrap().as_ref().unwrap().clone();
                 write!(f, "return {};", format!("{}", node))?
             }
             NodeKind::Start => write!(f, "Start()")?,
@@ -159,34 +175,34 @@ impl Display for Node {
             NodeKind::Add => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().g.get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().g.get(*rhs).unwrap().as_ref().unwrap().clone();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "({}+{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Sub => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().g.get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().g.get(*rhs).unwrap().as_ref().unwrap().clone();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "({}-{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Mul => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().g.get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().g.get(*rhs).unwrap().as_ref().unwrap().clone();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "({}*{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Div => {
                 let lhs = self.inputs.get(0).unwrap();
                 let rhs = self.inputs.get(1).unwrap();
-                let node_lhs = self.graph.borrow_mut().g.get(*lhs).unwrap().as_ref().unwrap().clone();
-                let node_rhs = self.graph.borrow_mut().g.get(*rhs).unwrap().as_ref().unwrap().clone();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_rhs = self.graph.borrow_mut().get(*rhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "({}/{})", format!("{}", node_lhs), format!("{}", node_rhs))?
             }
             NodeKind::Minus => {
                 let lhs = self.inputs.get(0).unwrap();
-                let node_lhs = self.graph.borrow_mut().g.get(*lhs).unwrap().as_ref().unwrap().clone();
+                let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "(-{})", format!("{}", node_lhs))?
             },
             NodeKind::Scope { scopes } => {
@@ -202,7 +218,7 @@ impl Display for Node {
                             write!(f, ", ")?;
                         }
                         first = false;
-                        let node_lhs = self.graph.borrow().g.get(*v).unwrap().as_ref().unwrap().clone();
+                        let node_lhs = self.graph.borrow().get(*v).unwrap().as_ref().unwrap().clone();
                         write!(f, "{}: {}", k, format!("{}", node_lhs))?;
                     }
                     write!(f, "]")?;
@@ -236,10 +252,10 @@ impl Node {
         let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
         graph_br.add_reverse_dependencies_br(index, &inputs_c)?;
-        if index == graph_br.g.len() {
-            graph_br.g.push(None);
+        if index == graph_br.len() {
+            graph_br.push(None);
         }
-        graph_br.g[index] = Some(node.clone());
+        graph_br.m_graph[index] = Some(node.clone());
         graph_br.add_dependencies_br(index, &inputs_c)?;
 
         // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
@@ -299,8 +315,8 @@ mod tests {
         let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start, Typ::Bot).unwrap();
 
         // Assert
-        assert_eq!(nid2, graph.borrow_mut().g.get(nid1).unwrap().as_ref().unwrap().outputs[0]);
-        assert_eq!(0, graph.borrow_mut().g.get(nid2).unwrap().as_ref().unwrap().outputs.len());
+        assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().outputs[0]);
+        assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().as_ref().unwrap().outputs.len());
     }
 
     #[test]
@@ -312,7 +328,7 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Int { constant: 42 }).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().g.get(nid1).unwrap().as_ref().unwrap().typ, Typ::Int { constant: 42 }));
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().typ, Typ::Int { constant: 42 }));
     }
 
     #[test]
@@ -324,7 +340,7 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().g.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 
     #[test]
@@ -336,8 +352,8 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
-        assert_eq!(1, graph.borrow().g.len());
-        assert!(matches!(graph.borrow_mut().g.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+        assert_eq!(1, graph.borrow().len());
+        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 
     #[test]
