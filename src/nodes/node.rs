@@ -121,6 +121,8 @@ pub enum SoNError {
     NumberCannotStartWith0,
     SyntaxExpected { expected: String, actual: String },
     TypTransitionNotAllowed,
+    VariableRedefinition { variable: String },
+    VariableUndefined { variable: String },
 }
 
 impl Node {

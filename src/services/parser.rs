@@ -1,10 +1,17 @@
+use crate::nodes::node::SoNError::VariableUndefined;
 use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
+use once_cell::sync::Lazy;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use SoNError::{SyntaxExpected, VariableRedefinition};
+
+pub static KEYWORDS: Lazy<HashSet<String>> = Lazy::new(|| {
+    HashSet::from(["int".into(), "return".into()])
+});
 
 pub struct Parser {
     lexer: Lexer,
@@ -19,7 +26,7 @@ pub(crate) const SCOPE_NID: usize = 2;
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
+        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
         ctx.add_node_unrefined(vec![], NodeKind::KeepAlive)?;
         let ctrl = ctx.add_node_unrefined(vec![], NodeKind::Start)?;
         assert_eq!(CTRL_NID, ctrl);
@@ -29,6 +36,17 @@ impl Parser {
         ctx.keep_node(scope_nid)?;
 
         Ok(ctx)
+    }
+
+    fn get_var(&mut self, name: &str) -> Result<Option<usize>, SoNError> {
+        let mut graph_br = self.graph.borrow_mut();
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+            if let Some(scope) = scopes.last_mut() {
+                return Ok(scope.get(name.into()).copied());
+            }
+            panic!("Tried to access scope, but none was there.")
+        }
+        panic!("Scope node was not scope kind.")
     }
 
     fn define_var(&mut self, name: &str, nid: usize) -> Result<(), SoNError> {
@@ -169,9 +187,9 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
-        let node = self.parse_inside_block()?;
+        let node = self.parse_block()?;
         if !self.lexer.is_eof() {
-            return Err(SoNError::SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+            return Err(SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
         }
         Ok(node)
     }
@@ -179,24 +197,73 @@ impl Parser {
     /// <pre>
     /// block: '{' statement+ '}'
     /// </pre>
-    fn parse_inside_block(&mut self) -> Result<usize, SoNError> {
+    fn parse_block(&mut self) -> Result<usize, SoNError> {
+        assert!(self.lexer.matsch("{"));
         self.push_scope()?;
         let mut node = self.parse_statement()?;
-        while let Some(c) = self.lexer.peek() && c != '}' {
+        while !self.lexer.is_eof() && !self.lexer.peek_matsch("}") {
             node = self.parse_statement()?;
         }
+        self.require("}")?;
         self.pop_scope()?;
         Ok(node)
     }
 
+    /// <pre>
+    /// returnStatement: 'return' returnStatement ';'
+    ///   declStatement: 'int' name '=' expression ';'
+    ///  blockStatement: '{' statement+ '}'
+    ///   exprStatement: name '=' expression ';'
+    /// </pre>
     fn parse_statement(&mut self) -> Result<usize, SoNError> {
-        if self.lexer.matschx("return") {
-            return self.parse_return();
+        if self.lexer.peek_matschx("return") {
+            return self.parse_return_stmnt();
         }
-        Err(SoNError::SyntaxExpected { expected: "Statement".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+        if self.lexer.peek_matschx("int") {
+            return self.parse_decl_stmnt();
+        }
+        if self.lexer.peek_matsch("{") {
+            return self.parse_block();
+        }
+        self.parse_expression_stmnt()
     }
 
-    fn parse_return(&mut self) -> Result<usize, SoNError> {
+    /// <pre>
+    /// declStatement: 'int' name '=' expression ';'
+    /// </pre>
+    fn parse_decl_stmnt(&mut self) -> Result<usize, SoNError> {
+        assert!(self.lexer.matschx("int"));
+        let name = self.require_and_get_identifier()?;
+        self.require("=")?;
+        let expression = self.parse_expression()?;
+        self.require(";")?;
+        if let Some(_) = self.get_var(&name)? {
+            return Err(VariableRedefinition { variable: name });
+        }
+        self.define_var(&name, expression)?;
+        Ok(expression)
+    }
+
+    /// <pre>
+    /// exprStatement: name '=' expression ';'
+    /// </pre>
+    fn parse_expression_stmnt(&mut self) -> Result<usize, SoNError> {
+        let name = self.require_and_get_identifier()?;
+        self.require("=")?;
+        let expression = self.parse_expression()?;
+        self.require(";")?;
+        if let Some(nid) = self.get_var(&name)? {
+            let nid1 = self.undefine_var(&name)?;
+            assert_eq!(nid, nid1);
+            self.define_var(&name, expression)?;
+        } else {
+            return Err(VariableUndefined { variable: name });
+        }
+        Ok(expression)
+    }
+
+    fn parse_return_stmnt(&mut self) -> Result<usize, SoNError> {
+        assert!(self.lexer.matschx("return"));
         let primary = self.parse_expression()?;
         self.require(";")?;
         let ret = self.add_node_unrefined(vec![CTRL_NID, primary], NodeKind::Return);
@@ -223,7 +290,7 @@ impl Parser {
     }
 
     /// <pre>
-    /// expr : additiveExpr
+    /// expression : additiveExpr
     /// </pre>
     fn parse_expression(&mut self) -> Result<usize, SoNError> {
         self.parse_addition()
@@ -287,7 +354,7 @@ impl Parser {
         if self.lexer.peek_is_number() {
             return self.parse_number_literal()
         }
-        Err(SoNError::SyntaxExpected { expected: "Primary expression".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+        Err(SyntaxExpected { expected: "Primary expression".to_string(), actual: self.lexer.dbg_get_any_next_token() })
     }
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
@@ -300,10 +367,21 @@ impl Parser {
         if self.lexer.matsch(syntax) {
             Ok(())
         } else {
-            Err(SoNError::SyntaxExpected {
+            Err(SyntaxExpected {
                 expected: syntax.to_string(),
                 actual: self.lexer.dbg_get_any_next_token(),
             })
+        }
+    }
+
+    fn require_and_get_identifier(&mut self) -> Result<String, SoNError> {
+        self.lexer.skip_whitespace();
+        if let Some(c) = self.lexer.peek() && Lexer::is_id_start(&c)
+            && let name = self.lexer.parse_id()
+            && !KEYWORDS.contains(&name) {
+            Ok(name)
+        } else {
+            Err(SyntaxExpected { expected: "Identifier".to_string(), actual: self.lexer.dbg_get_any_next_token() })
         }
     }
 }
@@ -407,7 +485,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "Statement"));
+        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "="));
     }
 
     #[test]
@@ -569,7 +647,7 @@ mod tests {
         let nid = parser.add_node_unrefined(vec![], NodeKind::Constant).unwrap();
 
         // Act
-        let result = parser.define_var("x", nid).unwrap();
+        parser.define_var("x", nid).unwrap();
 
         // Assert
         let graph_br = parser.graph.borrow();

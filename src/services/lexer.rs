@@ -42,9 +42,31 @@ impl Lexer {
         }
     }
 
-    // Return true, if we find "syntax" after skipping white space; also
-    // then advance the cursor past syntax.
-    // Return false otherwise, and do not advance the cursor.
+    /// Does NOT change self.
+    pub fn peek_matsch(&mut self, syntax: &str) -> bool {
+        let prev_position = self.position;
+        if self.matsch(syntax) {
+            self.position = prev_position;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Does NOT change self.
+    pub fn peek_matschx(&mut self, syntax: &str) -> bool {
+        let prev_position = self.position;
+        if self.matschx(syntax) {
+            self.position = prev_position;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Return true, if we find "syntax" after skipping white space; also
+    /// then advance the cursor past syntax.
+    /// Return false otherwise, and do not advance the cursor.
     pub fn matsch(&mut self, syntax: &str) -> bool {
         self.skip_whitespace();
         if self.input[self.position..].starts_with(syntax) {
@@ -135,7 +157,7 @@ impl Lexer {
     }
 
     // First letter of an identifier
-    fn is_id_start(ch: &char) -> bool {
+    pub fn is_id_start(ch: &char) -> bool {
         ch.is_alphabetic() || ch.eq(&'_')
     }
 }
