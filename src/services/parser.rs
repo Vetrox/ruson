@@ -1,4 +1,4 @@
-use crate::nodes::node::SoNError::VariableUndefined;
+use crate::nodes::node::SoNError::{DebugPropagateControlFlowUpward, VariableUndefined};
 use crate::nodes::node::{Graph, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
@@ -197,7 +197,11 @@ impl Parser {
         self.push_scope()?;
         let mut node = self.parse_statement()?;
         while !self.lexer.is_eof() && !self.lexer.peek_matsch("}") {
-            node = self.parse_statement()?;
+            let new_node = self.parse_statement();
+            if matches!(new_node, Err(DebugPropagateControlFlowUpward)) {
+                continue;
+            }
+            node = new_node?;
         }
         self.require("}")?;
         self.pop_scope()?;
@@ -215,6 +219,7 @@ impl Parser {
             let out = format!("#showGraph@{}\n{}", self.lexer.dbg_position(), self.as_dotfile());
             self._dbg_output.push_str(&out.as_str());
             println!("{}", out);
+            return Err(DebugPropagateControlFlowUpward)
         }
         if self.lexer.peek_matschx("return") {
             return self.parse_return_stmnt();

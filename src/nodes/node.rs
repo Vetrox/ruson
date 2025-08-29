@@ -43,6 +43,7 @@ pub enum SoNError {
     TypTransitionNotAllowed,
     VariableRedefinition { variable: String },
     VariableUndefined { variable: String },
+    DebugPropagateControlFlowUpward,
 }
 
 impl Node {

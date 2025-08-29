@@ -5,26 +5,26 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Graph {
-    m_graph: Vec<Option<Node>>,
-    node_id_counter: usize,
+    _graph: Vec<Option<Node>>,
+    _node_id_counter: usize,
 }
 
 impl Deref for Graph {
     type Target = Vec<Option<Node>>;
     fn deref(&self) -> &Self::Target {
-        &self.m_graph
+        &self._graph
     }
 }
 
 impl DerefMut for Graph {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.m_graph
+        &mut self._graph
     }
 }
 
 impl Graph {
     pub fn from(g: Vec<Option<Node>>) -> Graph {
-        Graph { m_graph: g, node_id_counter: 0 }
+        Graph { _graph: g, _node_id_counter: 0 }
     }
 
     pub fn new() -> Graph {
@@ -34,8 +34,8 @@ impl Graph {
     pub fn new_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
         let index = self.find_first_empty_cell();
 
-        let node = Node::new(node_kind, self.node_id_counter, index, typ);
-        self.node_id_counter += 1;
+        let node = Node::new(node_kind, self._node_id_counter, index, typ);
+        self._node_id_counter += 1;
         let inputs_c = inputs.clone();
         self.add_reverse_dependencies_br(index, &inputs_c)?;
         if index == self.len() {
