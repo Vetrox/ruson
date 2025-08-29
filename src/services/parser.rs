@@ -1,8 +1,9 @@
-use crate::nodes::node::{add_dependencies, add_usage_for_deps, get_node, remove_dependency, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct Parser {
@@ -14,15 +15,52 @@ pub struct Parser {
 
 pub(crate) const KEEP_ALIVE_NID: usize = 0;
 pub(crate) const CTRL_NID: usize = 1; // TODO: Introduce ScopeNode for this
+pub(crate) const SCOPE_NID: usize = 2;
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
         let mut ctx = Parser { lexer: Lexer::from_str(input), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
-        Node::new(ctx.graph.clone(), vec![], NodeKind::KeepAlive, Bot)?;
-        let ctrl = Node::new(ctx.graph.clone(), vec![], NodeKind::Start, Bot)?;
+        ctx.add_node_unrefined(vec![], NodeKind::KeepAlive)?;
+        let ctrl = ctx.add_node_unrefined(vec![], NodeKind::Start)?;
         assert_eq!(CTRL_NID, ctrl);
         ctx.keep_node(ctrl)?; // TODO: Introduce ScopeNode for this
+        let scope_nid = ctx.add_node_unrefined(vec![], NodeKind::Scope { scopes: vec![] })?;
+        assert_eq!(SCOPE_NID, scope_nid);
+        ctx.keep_node(scope_nid)?;
+
         Ok(ctx)
+    }
+
+    fn define_var(&mut self, name: &str, nid: usize) -> Result<(), SoNError> {
+        add_reverse_dependencies(self.graph.clone(), SCOPE_NID, &vec![nid])?;
+        add_dependencies(self.graph.clone(), SCOPE_NID, &vec![nid])?;
+
+        let mut graph_br = self.graph.borrow_mut();
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+            if let Some(scope) = scopes.last_mut() {
+                if scope.insert(name.into(), nid).is_some() {
+                    panic!("Variable was already defined. Undefine it first.");
+                }
+                return Ok(());
+            }
+            panic!("Tried to access scope, but none was there.")
+        }
+        panic!("Scope node was not scope kind.")
+    }
+
+    fn undefine_var(&mut self, name: &str) -> Result<usize, SoNError> {
+        let mut graph_br = self.graph.borrow_mut();
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+            if let Some(scope) = scopes.last_mut() {
+                if let Some(nid) = scope.remove(name.into()) {
+                    remove_dependency(self.graph.clone(), SCOPE_NID, nid)?;
+                    return Ok(nid);
+                }
+                panic!("Tried to undefine not-defined var.")
+            }
+            panic!("Tried to access scope, but none was there.")
+        }
+        panic!("Scope node was not scope kind.")
     }
 
     pub fn src(&self) -> String {
@@ -106,11 +144,48 @@ impl Parser {
         self.add_node(inputs, node_kind, Bot)
     }
 
+    fn push_scope(&mut self) -> Result<(), SoNError> {
+        let mut graph_br = self.graph.borrow_mut();
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+            scopes.push(HashMap::new());
+            return Ok(())
+        }
+        panic!("Scope node was not scope kind.")
+    }
+
+    fn pop_scope(&mut self) -> Result<(), SoNError> {
+        let mut graph_br = self.graph.borrow_mut();
+        let node = get_node_mut(graph_br.as_mut(), SCOPE_NID)?;
+        if let NodeKind::Scope { scopes } = &mut node.node_kind {
+            if let Some(scope) = scopes.pop() {
+                for &dep_nid in scope.values() {
+                    remove_dependency(self.graph.clone(), node.nid, dep_nid)?;
+                }
+                return Ok(());
+            }
+            panic!("Tried to pop scope, but none was there.")
+        }
+        panic!("Scope node was not scope kind.")
+    }
+
     pub fn parse(&mut self) -> Result<usize, SoNError> {
-        let node = self.parse_statement()?;
+        let node = self.parse_inside_block()?;
         if !self.lexer.is_eof() {
             return Err(SoNError::SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
         }
+        Ok(node)
+    }
+
+    /// <pre>
+    /// block: '{' statement+ '}'
+    /// </pre>
+    fn parse_inside_block(&mut self) -> Result<usize, SoNError> {
+        self.push_scope()?;
+        let mut node = self.parse_statement()?;
+        while let Some(c) = self.lexer.peek() && c != '}' {
+            node = self.parse_statement()?;
+        }
+        self.pop_scope()?;
         Ok(node)
     }
 
@@ -237,8 +312,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::nodes::node::{node_exists_unique, NodeKind, SoNError};
-    use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID};
+    use crate::nodes::node::{get_node, node_exists_unique, NodeKind, SoNError};
+    use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID, SCOPE_NID};
     use crate::typ::typ::Typ;
 
     #[test]
@@ -247,7 +322,7 @@ mod tests {
         let parser = Parser::new("return 1;").unwrap();
 
         // Assert
-        assert_eq!(2, parser.graph.borrow().len());
+        assert_eq!(3, parser.graph.borrow().len());
         assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
@@ -289,7 +364,7 @@ mod tests {
         parser.drop_unused_nodes();
 
         // Assert
-        assert_eq!(2, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.borrow_mut().get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
@@ -304,7 +379,7 @@ mod tests {
         parser.drop_unused_nodes_cap(0);
 
         // Assert
-        assert_eq!(4, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert_eq!(5, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
     }
 
     #[test]
@@ -318,7 +393,7 @@ mod tests {
         parser.drop_unused_nodes_cap(1);
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert_eq!(4, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
@@ -484,5 +559,28 @@ mod tests {
         // Assert
         let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return 2;", format!("{:}", node));
+    }
+
+    #[test]
+    fn should_define_var() {
+        // Arrange
+        let mut parser = Parser::new("").unwrap();
+        parser.push_scope().unwrap();
+        let nid = parser.add_node_unrefined(vec![], NodeKind::Constant).unwrap();
+
+        // Act
+        let result = parser.define_var("x", nid).unwrap();
+
+        // Assert
+        let graph_br = parser.graph.borrow();
+
+        assert!(matches!(get_node(graph_br.as_ref(), nid).unwrap().outputs.as_slice(), [a] if a == &SCOPE_NID));
+        assert!(matches!(get_node(graph_br.as_ref(), SCOPE_NID).unwrap().inputs.as_slice(), [a] if a == &nid));
+        if let NodeKind::Scope { scopes } = &get_node(graph_br.as_ref(), SCOPE_NID).unwrap().node_kind {
+            if let [ map ] = scopes.as_slice() && let Some(a) = map.get("x") && a == &nid {
+                return;
+            }
+        }
+        panic!();
     }
 }
