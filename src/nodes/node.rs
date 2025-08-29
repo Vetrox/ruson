@@ -133,7 +133,7 @@ impl Node {
         let index = find_first_empty_cell(&graph);
         let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
-        add_usage_for_deps(graph.clone(), index, &inputs_c)?;
+        add_reverse_dependencies(graph.clone(), index, &inputs_c)?;
         if index == graph.borrow().len() {
             graph.borrow_mut().push(None);
         }
@@ -199,8 +199,8 @@ pub fn find_first_empty_cell(graph: &Rc<RefCell<Vec<Option<Node>>>>) -> usize {
     index
 }
 
-/// adds the usages for all nodes in input to point to nid
-pub fn add_usage_for_deps(
+/// make the usages for all nodes in deps to point to nid
+pub fn add_reverse_dependencies(
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     nid: usize,
     deps: &Vec<usize>,
@@ -283,11 +283,13 @@ pub fn remove_dependency(
         return Err(SoNError::NodeIdNotExisting);
     }
 
-    if let Some(pos) = get_node_mut(&mut graph_br, nid)?.inputs.iter().position(|&x| x == dep_nid) {
-        get_node_mut(&mut graph_br, nid)?.inputs.remove(pos);
+    let node = get_node_mut(&mut graph_br, nid)?;
+    if let Some(pos) = node.inputs.iter().rev().position(|&x| x == dep_nid) {
+        node.inputs.remove(node.inputs.len() - 1 - pos);
     }
-    if let Some(pos) = get_node_mut(&mut graph_br, dep_nid)?.outputs.iter().position(|&x| x == nid) {
-        get_node_mut(&mut graph_br, dep_nid)?.outputs.remove(pos);
+    let dep = get_node_mut(&mut graph_br, dep_nid)?;
+    if let Some(pos) = dep.outputs.iter().rev().position(|&x| x == nid) {
+        dep.outputs.remove(dep.outputs.len() - 1 - pos);
     }
     Ok(())
 }
@@ -357,5 +359,39 @@ mod tests {
         // Assert
         assert_eq!(1, graph.borrow().len());
         assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+    }
+
+    #[test]
+    fn should_be_able_to_contain_same_dependency_multiple_times() {
+        // Arrange
+        let graph = Rc::new(RefCell::new(vec![None]));
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Bot).unwrap();
+
+        // Act
+        let nid2 = Node::new(graph.clone(), vec![nid1, nid1], NodeKind::Constant, Typ::Bot).unwrap();
+
+        // Assert
+        let graph_br = graph.borrow();
+        assert_eq!(2, get_node(&graph_br, nid2).unwrap().inputs.len());
+        assert_eq!(2, get_node(&graph_br, nid1).unwrap().outputs.len());
+    }
+
+    #[test]
+    fn should_remove_dependency_from_the_back() {
+        // Arrange
+        let graph = Rc::new(RefCell::new(vec![None]));
+        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid3 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        add_reverse_dependencies(graph.clone(), nid2, &vec![nid1]).unwrap();
+        add_dependencies(graph.clone(), nid2, &vec![nid1]).unwrap();
+
+        // Act
+        remove_dependency(graph.clone(), nid2, nid1).unwrap();
+
+        // Assert
+        let graph_br = graph.borrow();
+        assert!(matches!(get_node(&graph_br, nid2).unwrap().inputs.as_slice(), [i] if i == &nid1));
+        assert!(matches!(get_node(&graph_br, nid1).unwrap().outputs.as_slice(), [i, j] if i == &nid2 && j == &nid3));
     }
 }

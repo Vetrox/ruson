@@ -139,7 +139,7 @@ impl Parser {
     }
 
     fn keep_node(&mut self, nid: usize) -> Result<(), SoNError> {
-        add_usage_for_deps(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])?;
+        add_reverse_dependencies(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])?;
         add_dependencies(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])
     }
 
