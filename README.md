@@ -31,7 +31,7 @@ $\mathrm{meet}(\bot, \top) = \mathrm{max} \left \lbrace e: e \leq \bot \wedge e 
 
 $\bot$ is treated as an unknown value. We have to honor what the programmer wrote and emit the code.
 
-$\top \equiv $ all possible choices (constants). We can choose any value, as convenient.
+$\top \equiv$ all possible choices (constants). We can choose any value, as convenient.
 
 # Optimization techniques
 
