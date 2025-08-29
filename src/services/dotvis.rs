@@ -1,4 +1,4 @@
-use crate::nodes::node::{get_node, iter_graph, Node, NodeKind};
+use crate::nodes::node::{Node, NodeKind};
 use crate::services::parser::{Parser, SCOPE_NID};
 use crate::typ::typ::Typ;
 
@@ -30,7 +30,7 @@ pub fn as_dotfile(parser: &Parser) -> String {
     let graph_br = parser.graph.borrow();
 
     // define normal nodes
-    for n in iter_graph(graph_br.g.as_ref()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
+    for n in graph_br.iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         sb.push_str("\t\t");
         sb.push_str(&format!("Node_{}", n.nid));
         sb.push_str(" [ ");
@@ -48,7 +48,7 @@ pub fn as_dotfile(parser: &Parser) -> String {
     sb.push_str("\t}\n");     // End Node cluster
 
     // define the scope node
-    if let NodeKind::Scope { scopes } = &get_node(graph_br.g.as_ref(), SCOPE_NID).unwrap().node_kind {
+    if let NodeKind::Scope { scopes } = &graph_br.get_node(SCOPE_NID).unwrap().node_kind {
         sb.push_str("\tnode [shape=plaintext];\n");
         for (level, scope) in scopes.iter().enumerate() {
             sb.push_str("\tsubgraph cluster_");
@@ -75,7 +75,7 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
     // Walk the Node edges
     sb.push_str("\tedge [ fontname=Helvetica, fontsize=8 ];\n");
-    for n in iter_graph(graph_br.g.as_ref()).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
+    for n in graph_br.iter().filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         // In this chapter we do display the Constant->Start edge;
         for (i, def_nid) in n.inputs.iter().enumerate() {
             if let Some(Some(def)) = graph_br.g.get(*def_nid) {
@@ -99,7 +99,7 @@ pub fn as_dotfile(parser: &Parser) -> String {
 
     // Walk the variable definitions
     sb.push_str("\tedge [style=dashed color=cornflowerblue];\n");
-    let scope_node = get_node(graph_br.g.as_ref(), SCOPE_NID).unwrap();
+    let scope_node = graph_br.get_node(SCOPE_NID).unwrap();
     if let NodeKind::Scope { scopes } = &scope_node.node_kind {
         for (level, scope) in scopes.iter().enumerate() {
             let scope_name = format!("Node_{}_{}", SCOPE_NID, level);

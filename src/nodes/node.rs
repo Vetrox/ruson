@@ -1,4 +1,3 @@
-use crate::nodes::typ_refiner::compute_refined_typ;
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -20,6 +19,89 @@ impl Graph {
 
     pub fn from(g: Vec<Option<Node>>) -> Graph {
         Graph { g }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&Node> {
+        self.g.iter().filter_map(|x| x.as_ref())
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&Node> {
+        self.g.iter_mut().filter_map(|x| x.as_ref())
+    }
+
+    /// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
+    pub fn remove_dependency_br(&mut self, nid: usize, dep_nid: usize) -> Result<(), SoNError> {
+        if !self.node_exists(nid) || !self.node_exists(nid) {
+            return Err(SoNError::NodeIdNotExisting);
+        }
+
+        let node = self.get_node_mut(nid)?;
+        if let Some(pos) = node.inputs.iter().rev().position(|&x| x == dep_nid) {
+            node.inputs.remove(node.inputs.len() - 1 - pos);
+        }
+        let dep = self.get_node_mut(dep_nid)?;
+        if let Some(pos) = dep.outputs.iter().rev().position(|&x| x == nid) {
+            dep.outputs.remove(dep.outputs.len() - 1 - pos);
+        }
+        Ok(())
+    }
+
+    /// make the usages for all nodes in deps to point to nid
+    pub fn add_reverse_dependencies_br(&mut self, nid: usize, deps: &Vec<usize>) -> Result<(), SoNError> {
+        for id in deps {
+            match self.g.get_mut(*id) {
+                Some(Some(def)) => {
+                    def.outputs.push(nid);
+                    // def.outputs = def.outputs.clone().into_iter().unique().collect();
+                }
+                _ => return Err(SoNError::NodeIdNotExisting),
+            }
+        }
+        Ok(())
+    }
+
+    /// adds the dependencies for a node
+    pub fn add_dependencies_br(&mut self, nid: usize, deps: &Vec<usize>) -> Result<(), SoNError> {
+        match self.g.get_mut(nid) {
+            Some(Some(node)) => {
+                node.inputs.extend(deps);
+                // node.inputs = node.inputs.clone().into_iter().unique().collect();
+            },
+            _ => return Err(SoNError::NodeIdNotExisting),
+        };
+        Ok(())
+    }
+
+    pub fn find_first_empty_cell(&mut self) -> usize {
+        let index = self.g.iter().enumerate().find_map(|(i, x)| {
+            if x.is_none() {
+                Some(i)
+            } else {
+                None
+            }
+        }).unwrap_or_else(|| self.g.len());
+        index
+    }
+
+    pub fn get_node_mut(&mut self, nid: usize) -> Result<&mut Node, SoNError> {
+        self.g.get_mut(nid)
+            .and_then(|n| n.as_mut())
+            .ok_or(SoNError::NodeIdNotExisting)
+    }
+
+    pub fn get_node(&self, nid: usize) -> Result<&Node, SoNError> {
+        self.g.get(nid)
+            .and_then(|n| n.as_ref())
+            .ok_or(SoNError::NodeIdNotExisting)
+    }
+
+    pub fn node_exists(&self, nid: usize) -> bool {
+        self.get_node(nid).is_ok()
+    }
+
+    /// checks that the node in slot nid exists and that the unique id matches
+    pub fn node_exists_unique(&self, nid: usize, uid: usize) -> bool {
+        self.get_node(nid).is_ok_and(|x| x.uid == uid)
     }
 }
 
@@ -150,20 +232,20 @@ impl Node {
         typ: Typ,
     ) -> Result<usize, SoNError> {
         let mut graph_br = graph.borrow_mut();
-        let index = find_first_empty_cell(graph_br.g.as_ref());
+        let index = graph_br.find_first_empty_cell();
         let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
-        add_reverse_dependencies_br(graph_br.g.as_mut(), index, &inputs_c)?;
+        graph_br.add_reverse_dependencies_br(index, &inputs_c)?;
         if index == graph_br.g.len() {
             graph_br.g.push(None);
         }
         graph_br.g[index] = Some(node.clone());
-        add_dependencies_br(graph_br.g.as_mut(), index, &inputs_c)?;
+        graph_br.add_dependencies_br(index, &inputs_c)?;
 
         // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
-        let n = get_node(graph_br.g.as_ref(), index)?;
-        let typ = compute_refined_typ(graph_br.g.as_ref(), n)?;
-        get_node_mut(graph_br.g.as_mut(), index)?.refine_typ(typ)?;
+        let n = graph_br.get_node(index)?;
+        let typ = graph_br.compute_refined_typ(n)?;
+        graph_br.get_node_mut(index)?.refine_typ(typ)?;
 
         Ok(index)
     }
@@ -202,147 +284,6 @@ impl Node {
             _ => false
         }
     }
-}
-
-pub fn find_first_empty_cell(
-    graph_br: &Vec<Option<Node>>,
-) -> usize {
-    let index = graph_br.iter().enumerate().find_map(|(i, x)| {
-        if x.is_none() {
-            Some(i)
-        } else {
-            None
-        }
-    }).unwrap_or_else(|| graph_br.len());
-    index
-}
-
-/// make the usages for all nodes in deps to point to nid
-pub fn add_reverse_dependencies_deprecated(
-    graph: Rc<RefCell<Vec<Option<Node>>>>,
-    nid: usize,
-    deps: &Vec<usize>,
-) -> Result<(), SoNError> {
-    add_reverse_dependencies_br(graph.clone().borrow_mut().as_mut(), nid, deps)
-}
-
-/// make the usages for all nodes in deps to point to nid
-pub fn add_reverse_dependencies_br(
-    graph_br: &mut Vec<Option<Node>>,
-    nid: usize,
-    deps: &Vec<usize>,
-) -> Result<(), SoNError> {
-    for id in deps {
-        match graph_br.get_mut(*id) {
-            Some(Some(def)) => {
-                def.outputs.push(nid);
-                // def.outputs = def.outputs.clone().into_iter().unique().collect();
-            }
-            _ => return Err(SoNError::NodeIdNotExisting),
-        }
-    }
-    Ok(())
-}
-
-pub fn get_node_mut(
-    graph: &mut Vec<Option<Node>>,
-    nid: usize,
-) -> Result<&mut Node, SoNError> {
-    graph
-        .get_mut(nid)
-        .and_then(|n| n.as_mut())
-        .ok_or(SoNError::NodeIdNotExisting)
-}
-
-pub fn get_node(
-    graph: &Vec<Option<Node>>,
-    nid: usize,
-) -> Result<&Node, SoNError> {
-    graph
-        .get(nid)
-        .and_then(|n| n.as_ref())
-        .ok_or(SoNError::NodeIdNotExisting)
-}
-
-pub fn node_exists(
-    graph: &Vec<Option<Node>>,
-    nid: usize,
-) -> bool {
-    get_node(graph, nid).is_ok()
-}
-
-/// checks that the node with slot nid exists and that the unique id matches
-pub fn node_exists_unique(
-    graph: &Vec<Option<Node>>,
-    nid: usize,
-    uid: usize,
-) -> bool {
-    get_node(graph, nid).is_ok_and(|x| x.uid == uid)
-}
-
-/// adds the dependencies for a node
-pub fn add_dependencies_deprecated(
-    graph: Rc<RefCell<Vec<Option<Node>>>>,
-    nid: usize,
-    deps: &Vec<usize>,
-) -> Result<(), SoNError> {
-    add_dependencies_br(graph.clone().borrow_mut().as_mut(), nid, deps)
-}
-
-/// adds the dependencies for a node
-pub fn add_dependencies_br(
-    graph_br: &mut Vec<Option<Node>>,
-    nid: usize,
-    deps: &Vec<usize>,
-) -> Result<(), SoNError> {
-    match graph_br.get_mut(nid) {
-        Some(Some(node)) => {
-            node.inputs.extend(deps);
-            // node.inputs = node.inputs.clone().into_iter().unique().collect();
-        },
-        _ => return Err(SoNError::NodeIdNotExisting),
-    };
-    Ok(())
-}
-
-/// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
-pub fn remove_dependency_deprecated(
-    graph: Rc<RefCell<Vec<Option<Node>>>>,
-    nid: usize,
-    dep_nid: usize,
-) -> Result<(), SoNError> {
-    remove_dependency_br(graph.clone().borrow_mut().as_mut(), nid, dep_nid)
-}
-
-/// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
-pub fn remove_dependency_br(
-    graph_br: &mut Vec<Option<Node>>,
-    nid: usize,
-    dep_nid: usize,
-) -> Result<(), SoNError> {
-    if !node_exists(graph_br, nid) || !node_exists(graph_br, nid) {
-        return Err(SoNError::NodeIdNotExisting);
-    }
-
-    let node = get_node_mut(graph_br, nid)?;
-    if let Some(pos) = node.inputs.iter().rev().position(|&x| x == dep_nid) {
-        node.inputs.remove(node.inputs.len() - 1 - pos);
-    }
-    let dep = get_node_mut(graph_br, dep_nid)?;
-    if let Some(pos) = dep.outputs.iter().rev().position(|&x| x == nid) {
-        dep.outputs.remove(dep.outputs.len() - 1 - pos);
-    }
-    Ok(())
-}
-
-pub fn iter_graph(
-    graph: &Vec<Option<Node>>) -> impl Iterator<Item=&Node> {
-    graph.iter().filter_map(|x| x.as_ref())
-}
-
-pub fn iter_graph_mut(
-    graph: &mut Vec<Option<Node>>) -> impl Iterator<Item=&Node> {
-    graph.iter_mut().filter_map(|x| x.as_ref())
 }
 
 #[cfg(test)]
@@ -413,8 +354,8 @@ mod tests {
 
         // Assert
         let graph_br = graph.borrow();
-        assert_eq!(2, get_node(&graph_br.g, nid2).unwrap().inputs.len());
-        assert_eq!(2, get_node(&graph_br.g, nid1).unwrap().outputs.len());
+        assert_eq!(2, graph_br.get_node(nid2).unwrap().inputs.len());
+        assert_eq!(2, graph_br.get_node(nid1).unwrap().outputs.len());
     }
 
     #[test]
@@ -425,14 +366,14 @@ mod tests {
         let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
         let nid3 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
         let mut graph_br = graph.borrow_mut();
-        add_reverse_dependencies_br(graph_br.g.as_mut(), nid2, &vec![nid1]).unwrap();
-        add_dependencies_br(graph_br.g.as_mut(), nid2, &vec![nid1]).unwrap();
+        graph_br.add_reverse_dependencies_br(nid2, &vec![nid1]).unwrap();
+        graph_br.add_dependencies_br(nid2, &vec![nid1]).unwrap();
 
         // Act
-        remove_dependency_br(graph_br.g.as_mut(), nid2, nid1).unwrap();
+        graph_br.remove_dependency_br(nid2, nid1).unwrap();
 
         // Assert
-        assert!(matches!(get_node(&graph_br.g, nid2).unwrap().inputs.as_slice(), [i] if i == &nid1));
-        assert!(matches!(get_node(&graph_br.g, nid1).unwrap().outputs.as_slice(), [i, j] if i == &nid2 && j == &nid3));
+        assert!(matches!(graph_br.get_node( nid2).unwrap().inputs.as_slice(), [i] if i == &nid1));
+        assert!(matches!(graph_br.get_node( nid1).unwrap().outputs.as_slice(), [i, j] if i == &nid2 && j == &nid3));
     }
 }
