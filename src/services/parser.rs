@@ -405,8 +405,6 @@ mod tests {
     use crate::nodes::node::{NodeKind, SoNError};
     use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID, SCOPE_NID};
     use crate::typ::typ::Typ;
-    use std::cell::RefCell;
-    use std::rc::Rc;
 
     #[test]
     fn should_be_able_to_create_new_parser() {
@@ -439,8 +437,7 @@ mod tests {
             }
             _ => assert!(false)
         }
-        let my_node = node.clone();
-        println!("Parsing result is: {}", format!("{:}", BoundNode::new(&my_node, Rc::new(RefCell::new(parser.graph)))));
+        println!("Parsing result is: {}", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -550,8 +547,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1+1);", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return (1+1);", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -564,8 +561,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1-1);", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return (1-1);", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -578,8 +575,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1*1);", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return (1*1);", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -592,8 +589,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1/1);", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return (1/1);", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -606,8 +603,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return ((1*2)+3);", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return ((1*2)+3);", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -620,8 +617,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return (1*(2*3));", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return (1*(2*3));", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -634,8 +631,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get_node(result).unwrap().clone();
-        assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -647,8 +644,8 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get_node(result).unwrap().clone();
-        assert_eq!("return 2;", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return 2;", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 
     #[test]
@@ -681,7 +678,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.get(result).unwrap().as_ref().unwrap().clone();
-        assert_eq!("return 1;", format!("{:}", BoundNode::new(&node, Rc::new(RefCell::new(parser.graph)))));
+        let node = parser.graph.get(result).unwrap().as_ref().unwrap();
+        assert_eq!("return 1;", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 }
