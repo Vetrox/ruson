@@ -1,6 +1,5 @@
 use crate::nodes::node::SoNError::VariableUndefined;
 use crate::nodes::node::{Graph, NodeKind, SoNError};
-use crate::services::dotvis::as_dotfile;
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
@@ -18,6 +17,7 @@ pub struct Parser {
     pub graph: Graph,
     /// peephole optimization
     pub do_optimize: bool,
+    pub _dbg_output: String,
 }
 
 pub(crate) const KEEP_ALIVE_NID: usize = 0;
@@ -26,7 +26,7 @@ pub(crate) const SCOPE_NID: usize = 2;
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Graph::new(), do_optimize: true };
+        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Graph::new(), do_optimize: true, _dbg_output: "".into() };
         ctx.add_node_unrefined(vec![], NodeKind::KeepAlive)?;
         let ctrl = ctx.add_node_unrefined(vec![], NodeKind::Start)?;
         assert_eq!(CTRL_NID, ctrl);
@@ -212,7 +212,9 @@ impl Parser {
     /// </pre>
     fn parse_statement(&mut self) -> Result<usize, SoNError> {
         if self.lexer.matsch("#showGraph;") {
-            println!("#showGraph@{}\n{}", self.lexer.dbg_position(), as_dotfile(&self));
+            let out = format!("#showGraph@{}\n{}", self.lexer.dbg_position(), self.as_dotfile());
+            self._dbg_output.push_str(&out.as_str());
+            println!("{}", out);
         }
         if self.lexer.peek_matschx("return") {
             return self.parse_return_stmnt();
