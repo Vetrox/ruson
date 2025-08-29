@@ -280,16 +280,24 @@ pub fn remove_dependency(
     dep_nid: usize,
 ) -> Result<(), SoNError> {
     let mut graph_br = graph.borrow_mut();
+    remove_dependency_br(graph_br.as_mut(), nid, dep_nid)
+}
 
-    if !node_exists(&mut graph_br, nid) || !node_exists(&mut graph_br, nid) {
+/// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
+pub fn remove_dependency_br(
+    graph_br: &mut Vec<Option<Node>>,
+    nid: usize,
+    dep_nid: usize,
+) -> Result<(), SoNError> {
+    if !node_exists(graph_br, nid) || !node_exists(graph_br, nid) {
         return Err(SoNError::NodeIdNotExisting);
     }
 
-    let node = get_node_mut(&mut graph_br, nid)?;
+    let node = get_node_mut(graph_br, nid)?;
     if let Some(pos) = node.inputs.iter().rev().position(|&x| x == dep_nid) {
         node.inputs.remove(node.inputs.len() - 1 - pos);
     }
-    let dep = get_node_mut(&mut graph_br, dep_nid)?;
+    let dep = get_node_mut(graph_br, dep_nid)?;
     if let Some(pos) = dep.outputs.iter().rev().position(|&x| x == nid) {
         dep.outputs.remove(dep.outputs.len() - 1 - pos);
     }

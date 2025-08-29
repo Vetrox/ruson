@@ -1,10 +1,11 @@
 use crate::nodes::node::SoNError::VariableUndefined;
-use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, remove_dependency_br, Node, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
+use std::collections::hash_map::Values;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use SoNError::{SyntaxExpected, VariableRedefinition};
@@ -176,8 +177,11 @@ impl Parser {
         let node = get_node_mut(graph_br.as_mut(), SCOPE_NID)?;
         if let NodeKind::Scope { scopes } = &mut node.node_kind {
             if let Some(scope) = scopes.pop() {
-                for &dep_nid in scope.values() {
-                    remove_dependency(self.graph.clone(), node.nid, dep_nid)?;
+                let defined_nids: Values<String, usize> = scope.values();
+                drop(graph_br);
+                let mut graph_br = self.graph.borrow_mut(); // Reborrow mutably
+                for &dep_nid in defined_nids {
+                    remove_dependency_br(graph_br.as_mut(), SCOPE_NID, dep_nid)?;
                 }
                 return Ok(());
             }
@@ -211,9 +215,9 @@ impl Parser {
 
     /// <pre>
     /// returnStatement: 'return' returnStatement ';'
-    ///   declStatement: 'int' name '=' expression ';'
+    ///   declStatement: 'int' identifier '=' expression ';'
     ///  blockStatement: '{' statement+ '}'
-    ///   exprStatement: name '=' expression ';'
+    ///   exprStatement: identifier '=' expression ';'
     /// </pre>
     fn parse_statement(&mut self) -> Result<usize, SoNError> {
         if self.lexer.peek_matschx("return") {
@@ -229,7 +233,7 @@ impl Parser {
     }
 
     /// <pre>
-    /// declStatement: 'int' name '=' expression ';'
+    /// declStatement: 'int' identifier '=' expression ';'
     /// </pre>
     fn parse_decl_stmnt(&mut self) -> Result<usize, SoNError> {
         assert!(self.lexer.matschx("int"));
@@ -245,7 +249,7 @@ impl Parser {
     }
 
     /// <pre>
-    /// exprStatement: name '=' expression ';'
+    /// exprStatement: identifier '=' expression ';'
     /// </pre>
     fn parse_expression_stmnt(&mut self) -> Result<usize, SoNError> {
         let name = self.require_and_get_identifier()?;
@@ -349,12 +353,25 @@ impl Parser {
         }
     }
 
+    /// <pre>
+    /// primaryExpr : integerLiteral | identifier | '(' expression ')'
+    /// </pre>
     fn parse_primary(&mut self) -> Result<usize, SoNError> {
         self.lexer.skip_whitespace();
         if self.lexer.peek_is_number() {
             return self.parse_number_literal()
         }
-        Err(SyntaxExpected { expected: "Primary expression".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+        if self.lexer.matsch("(") {
+            let node = self.parse_expression()?;
+            self.require(")")?;
+            return Ok(node);
+        }
+        let name = self.require_and_get_identifier()?;
+        if let Some(nid) = self.get_var(&name)? {
+            Ok(nid)
+        } else {
+            Err(VariableUndefined { variable: name })
+        }
     }
 
     fn parse_number_literal(&mut self) -> Result<usize, SoNError> {
@@ -660,5 +677,18 @@ mod tests {
             }
         }
         panic!();
+    }
+
+    #[test]
+    fn should_define_var_in_program() {
+        // Arrange
+        let mut parser = Parser::new("int a=1; return a;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        assert_eq!("return 1;", format!("{:}", node));
     }
 }
