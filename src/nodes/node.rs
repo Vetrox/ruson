@@ -1,9 +1,6 @@
 pub(crate) use crate::nodes::graph::Graph;
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
-
-pub(crate) static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 #[derive(Clone)]

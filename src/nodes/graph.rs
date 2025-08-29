@@ -1,12 +1,12 @@
 use crate::nodes::node::{Node, NodeKind, SoNError};
 use crate::typ::typ::Typ;
 use std::ops::{Deref, DerefMut};
-use std::sync::atomic::Ordering;
 
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Graph {
     m_graph: Vec<Option<Node>>,
+    node_id_counter: usize,
 }
 
 impl Deref for Graph {
@@ -24,7 +24,7 @@ impl DerefMut for Graph {
 
 impl Graph {
     pub fn from(g: Vec<Option<Node>>) -> Graph {
-        Graph { m_graph: g }
+        Graph { m_graph: g, node_id_counter: 0 }
     }
 
     pub fn new() -> Graph {
@@ -33,7 +33,9 @@ impl Graph {
 
     pub fn new_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
         let index = self.find_first_empty_cell();
-        let node = Node::new(node_kind, crate::nodes::node::GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), index, typ);
+
+        let node = Node::new(node_kind, self.node_id_counter, index, typ);
+        self.node_id_counter += 1;
         let inputs_c = inputs.clone();
         self.add_reverse_dependencies_br(index, &inputs_c)?;
         if index == self.len() {
