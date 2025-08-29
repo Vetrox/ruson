@@ -90,6 +90,7 @@ fn node_icon(node: &Node) -> String {
         NodeKind::Mul => "*".into(),
         NodeKind::Div => "/".into(),
         NodeKind::Minus => "-".into(),
+        NodeKind::Scope { .. } => "Scope".into(),
     }
 }
 

@@ -3,6 +3,19 @@ use crate::typ::typ::Typ;
 
 pub fn compute_refined_typ(graph: &Vec<Option<Node>>, node: &Node) -> Result<Typ, SoNError> {
     match node.node_kind {
+        NodeKind::Constant => {}
+        NodeKind::Return => {}
+        NodeKind::Start => {}
+        NodeKind::KeepAlive => {}
+        NodeKind::Add => {}
+        NodeKind::Sub => {}
+        NodeKind::Mul => {}
+        NodeKind::Div => {}
+        NodeKind::Minus => {}
+        NodeKind::Scope { .. } => {}
+    }
+
+    match node.node_kind {
         NodeKind::Add => {
             let lhs = get_node(graph, *node.inputs.get(0).unwrap())?;
             let rhs = get_node(graph, *node.inputs.get(1).unwrap())?;

@@ -1,5 +1,6 @@
 use crate::nodes::typ_refiner::compute_refined_typ;
 use crate::typ::typ::Typ;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cell::RefCell, rc::Rc};
@@ -36,12 +37,13 @@ pub enum NodeKind {
     Sub,
     Mul,
     Div,
-    Minus
+    Minus,
+    Scope { scopes: Vec<HashMap<String, usize>> },
 }
 
 impl Display for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.node_kind {
+        match self.clone().node_kind {
             NodeKind::Constant => {
                 match self.typ() {
                     Typ::Int { constant } => write!(f, "{}", constant)?,
@@ -87,6 +89,26 @@ impl Display for Node {
                 let lhs = self.inputs.get(0).unwrap();
                 let node_lhs = self.graph.borrow_mut().get(*lhs).unwrap().as_ref().unwrap().clone();
                 write!(f, "(-{})", format!("{}", node_lhs))?
+            },
+            NodeKind::Scope { scopes } => {
+                write!(f, "Scope(")?;
+                for scope in scopes {
+                    let mut entries: Vec<_> = scope.iter().collect();
+                    entries.sort_by_key(|&(k, _)| k);
+
+                    write!(f, "[")?;
+                    let mut first = true;
+                    for (k, v) in entries {
+                        if !(first) {
+                            write!(f, ", ")?;
+                        }
+                        first = false;
+                        let node_lhs = self.graph.borrow().get(*v).unwrap().as_ref().unwrap().clone();
+                        write!(f, "{}: {}", k, format!("{}", node_lhs))?;
+                    }
+                    write!(f, "]")?;
+                }
+                write!(f, ")")?;
             }
         }
         Ok(())
@@ -145,6 +167,18 @@ impl Node {
 
     /// returns whether this node is associated with the control flow graph
     pub fn is_cfg(&self) -> bool {
+        match self.node_kind {
+            NodeKind::Constant => {}
+            NodeKind::Return => {}
+            NodeKind::Start => {}
+            NodeKind::KeepAlive => {}
+            NodeKind::Add => {}
+            NodeKind::Sub => {}
+            NodeKind::Mul => {}
+            NodeKind::Div => {}
+            NodeKind::Minus => {}
+            NodeKind::Scope { .. } => {}
+        }
         match self.node_kind {
             NodeKind::Return
             | NodeKind::Start => true,
