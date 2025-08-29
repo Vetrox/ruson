@@ -1,5 +1,5 @@
 use crate::nodes::node::SoNError::VariableUndefined;
-use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, remove_dependency_br, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies_br, add_reverse_dependencies_br, get_node, get_node_mut, remove_dependency_br, Node, NodeKind, SoNError};
 use crate::services::dotvis::as_dotfile;
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
@@ -52,10 +52,10 @@ impl Parser {
     }
 
     fn define_var(&mut self, name: &str, nid: usize) -> Result<(), SoNError> {
-        add_reverse_dependencies(self.graph.clone(), SCOPE_NID, &vec![nid])?;
-        add_dependencies(self.graph.clone(), SCOPE_NID, &vec![nid])?;
-
         let mut graph_br = self.graph.borrow_mut();
+        add_reverse_dependencies_br(graph_br.as_mut(), SCOPE_NID, &vec![nid])?;
+        add_dependencies_br(graph_br.as_mut(), SCOPE_NID, &vec![nid])?;
+
         if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
             if let Some(scope) = scopes.last_mut() {
                 if scope.insert(name.into(), nid).is_some() {
@@ -73,7 +73,7 @@ impl Parser {
         if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
             if let Some(scope) = scopes.last_mut() {
                 if let Some(nid) = scope.remove(name.into()) {
-                    remove_dependency(self.graph.clone(), SCOPE_NID, nid)?;
+                    remove_dependency_br(graph_br.as_mut(), SCOPE_NID, nid)?;
                     return Ok(nid);
                 }
                 panic!("Tried to undefine not-defined var.")
@@ -289,12 +289,14 @@ impl Parser {
     }
 
     fn keep_node(&mut self, nid: usize) -> Result<(), SoNError> {
-        add_reverse_dependencies(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])?;
-        add_dependencies(self.graph.clone(), KEEP_ALIVE_NID, &vec![nid])
+        let mut graph_br = self.graph.borrow_mut();
+        add_reverse_dependencies_br(graph_br.as_mut(), KEEP_ALIVE_NID, &vec![nid])?;
+        add_dependencies_br(graph_br.as_mut(), KEEP_ALIVE_NID, &vec![nid])
     }
 
     fn unkeep_node(&mut self, nid: usize) -> Result<(), SoNError> {
-        remove_dependency(self.graph.clone(), KEEP_ALIVE_NID, nid)
+        let mut graph_br = self.graph.borrow_mut();
+        remove_dependency_br(graph_br.as_mut(), KEEP_ALIVE_NID, nid)
     }
 
     /// <pre>

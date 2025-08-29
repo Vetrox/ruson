@@ -135,12 +135,14 @@ impl Node {
         let index = find_first_empty_cell(&graph);
         let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
-        add_reverse_dependencies(graph.clone(), index, &inputs_c)?;
+        let mut graph_br = graph.borrow_mut();
+        add_reverse_dependencies_br(graph_br.as_mut(), index, &inputs_c)?;
+        drop(graph_br);
         if index == graph.borrow().len() {
             graph.borrow_mut().push(None);
         }
         graph.borrow_mut()[index] = Some(node.clone());
-        add_dependencies(graph.clone(), index, &inputs_c)?;
+        add_dependencies_br(graph.borrow_mut().as_mut(), index, &inputs_c)?;
 
         // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
         let graph_br = graph.borrow();
@@ -202,12 +204,20 @@ pub fn find_first_empty_cell(graph: &Rc<RefCell<Vec<Option<Node>>>>) -> usize {
 }
 
 /// make the usages for all nodes in deps to point to nid
-pub fn add_reverse_dependencies(
+pub fn add_reverse_dependencies_deprecated(
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     nid: usize,
     deps: &Vec<usize>,
 ) -> Result<(), SoNError> {
-    let mut graph_br = graph.borrow_mut();
+    add_reverse_dependencies_br(graph.clone().borrow_mut().as_mut(), nid, deps)
+}
+
+/// make the usages for all nodes in deps to point to nid
+pub fn add_reverse_dependencies_br(
+    graph_br: &mut Vec<Option<Node>>,
+    nid: usize,
+    deps: &Vec<usize>,
+) -> Result<(), SoNError> {
     for id in deps {
         match graph_br.get_mut(*id) {
             Some(Some(def)) => {
@@ -257,12 +267,20 @@ pub fn node_exists_unique(
 }
 
 /// adds the dependencies for a node
-pub fn add_dependencies(
+pub fn add_dependencies_deprecated(
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     nid: usize,
     deps: &Vec<usize>,
 ) -> Result<(), SoNError> {
-    let mut graph_br = graph.borrow_mut();
+    add_dependencies_br(graph.clone().borrow_mut().as_mut(), nid, deps)
+}
+
+/// adds the dependencies for a node
+pub fn add_dependencies_br(
+    graph_br: &mut Vec<Option<Node>>,
+    nid: usize,
+    deps: &Vec<usize>,
+) -> Result<(), SoNError> {
     match graph_br.get_mut(nid) {
         Some(Some(node)) => {
             node.inputs.extend(deps);
@@ -274,13 +292,12 @@ pub fn add_dependencies(
 }
 
 /// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
-pub fn remove_dependency(
+pub fn remove_dependency_deprecated(
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     nid: usize,
     dep_nid: usize,
 ) -> Result<(), SoNError> {
-    let mut graph_br = graph.borrow_mut();
-    remove_dependency_br(graph_br.as_mut(), nid, dep_nid)
+    remove_dependency_br(graph.clone().borrow_mut().as_mut(), nid, dep_nid)
 }
 
 /// remove dependency dep_nid from nid so nid doesn't depend on dep_nid anymore.
@@ -393,14 +410,14 @@ mod tests {
         let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Bot).unwrap();
         let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
         let nid3 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
-        add_reverse_dependencies(graph.clone(), nid2, &vec![nid1]).unwrap();
-        add_dependencies(graph.clone(), nid2, &vec![nid1]).unwrap();
+        let mut graph_br = graph.borrow_mut();
+        add_reverse_dependencies_br(graph_br.as_mut(), nid2, &vec![nid1]).unwrap();
+        add_dependencies_br(graph_br.as_mut(), nid2, &vec![nid1]).unwrap();
 
         // Act
-        remove_dependency(graph.clone(), nid2, nid1).unwrap();
+        remove_dependency_br(graph_br.as_mut(), nid2, nid1).unwrap();
 
         // Assert
-        let graph_br = graph.borrow();
         assert!(matches!(get_node(&graph_br, nid2).unwrap().inputs.as_slice(), [i] if i == &nid1));
         assert!(matches!(get_node(&graph_br, nid1).unwrap().outputs.as_slice(), [i, j] if i == &nid2 && j == &nid3));
     }

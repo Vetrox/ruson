@@ -78,7 +78,6 @@ pub fn as_dotfile(parser: &Parser) -> String {
     for n in iter_graph(&*graph_br).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         // In this chapter we do display the Constant->Start edge;
         for (i, def_nid) in n.inputs.iter().enumerate() {
-            //if (def != null) { TODO: currently we do NOT allow for Optionals in the inputs, which needs to be supported in the future.
             if let Some(Some(def)) = graph_br.get(*def_nid) {
                 // Most edges land here use->def
                 sb.push('\t');
