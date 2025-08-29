@@ -1,10 +1,9 @@
 pub(crate) use crate::nodes::graph::Graph;
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::{cell::RefCell, rc::Rc};
+use std::sync::atomic::AtomicUsize;
 
-static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -50,29 +49,8 @@ pub enum SoNError {
 }
 
 impl Node {
-    pub fn new(
-        graph: Rc<RefCell<Graph>>,
-        inputs: Vec<usize>,
-        node_kind: NodeKind,
-        typ: Typ,
-    ) -> Result<usize, SoNError> {
-        let mut graph_br = graph.borrow_mut();
-        let index = graph_br.find_first_empty_cell();
-        let node = Node { node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
-        let inputs_c = inputs.clone();
-        graph_br.add_reverse_dependencies_br(index, &inputs_c)?;
-        if index == graph_br.len() {
-            graph_br.push(None);
-        }
-        graph_br[index] = Some(node.clone());
-        graph_br.add_dependencies_br(index, &inputs_c)?;
-
-        // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
-        let n = graph_br.get_node(index)?;
-        let typ = graph_br.compute_refined_typ(n)?;
-        graph_br.get_node_mut(index)?.refine_typ(typ)?;
-
-        Ok(index)
+    pub fn new(node_kind: NodeKind, uid: usize, nid: usize, typ: Typ) -> Node {
+        Node { node_kind, inputs: vec![], outputs: vec![], uid, nid, typ }
     }
 
     pub fn typ(&self) -> Typ {
@@ -110,72 +88,70 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
-
     use super::*;
 
     #[test]
     fn should_construct_start_node() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::new()));
+        let mut graph = Graph::new();
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Start, Typ::Bot).unwrap();
-        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Start, Typ::Bot).unwrap();
+        let nid1 = graph.new_node(vec![], NodeKind::Start, Typ::Bot).unwrap();
+        let nid2 = graph.new_node(vec![nid1], NodeKind::Start, Typ::Bot).unwrap();
 
         // Assert
-        assert_eq!(nid2, graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().outputs[0]);
-        assert_eq!(0, graph.borrow_mut().get(nid2).unwrap().as_ref().unwrap().outputs.len());
+        assert_eq!(nid2, graph.get_node(nid1).unwrap().outputs[0]);
+        assert_eq!(0, graph.get_node(nid2).unwrap().outputs.len());
     }
 
     #[test]
     fn should_construct_constant_node() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::new()));
+        let mut graph = Graph::new();
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Int { constant: 42 }).unwrap();
+        let nid1 = graph.new_node(vec![], NodeKind::Constant, Typ::Int { constant: 42 }).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().typ, Typ::Int { constant: 42 }));
+        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().typ, Typ::Int { constant: 42 }));
     }
 
     #[test]
     fn should_construct_return_node() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::new()));
+        let mut graph = Graph::new();
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
+        let nid1 = graph.new_node(vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 
     #[test]
     fn should_construct_return_node_in_empty_slot() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::from(vec![None])));
+        let mut graph = Graph::from(vec![None]);
 
         // Act
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Return, Typ::Bot).unwrap();
+        let nid1 = graph.new_node(vec![], NodeKind::Return, Typ::Bot).unwrap();
 
         // Assert
-        assert_eq!(1, graph.borrow().len());
-        assert!(matches!(graph.borrow_mut().get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+        assert_eq!(1, graph.len());
+        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
     }
 
     #[test]
     fn should_be_able_to_contain_same_dependency_multiple_times() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::from(vec![None])));
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Bot).unwrap();
+        let mut graph = Graph::from(vec![None]);
+        let nid1 = graph.new_node(vec![], NodeKind::Constant, Typ::Bot).unwrap();
 
         // Act
-        let nid2 = Node::new(graph.clone(), vec![nid1, nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid2 = graph.new_node(vec![nid1, nid1], NodeKind::Constant, Typ::Bot).unwrap();
 
         // Assert
-        let graph_br = graph.borrow();
+        let graph_br = graph;
         assert_eq!(2, graph_br.get_node(nid2).unwrap().inputs.len());
         assert_eq!(2, graph_br.get_node(nid1).unwrap().outputs.len());
     }
@@ -183,11 +159,11 @@ mod tests {
     #[test]
     fn should_remove_dependency_from_the_back() {
         // Arrange
-        let graph = Rc::new(RefCell::new(Graph::from(vec![None])));
-        let nid1 = Node::new(graph.clone(), vec![], NodeKind::Constant, Typ::Bot).unwrap();
-        let nid2 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
-        let nid3 = Node::new(graph.clone(), vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
-        let mut graph_br = graph.borrow_mut();
+        let mut graph = Graph::from(vec![None]);
+        let nid1 = graph.new_node(vec![], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid2 = graph.new_node(vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid3 = graph.new_node(vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let mut graph_br = graph;
         graph_br.add_reverse_dependencies_br(nid2, &vec![nid1]).unwrap();
         graph_br.add_dependencies_br(nid2, &vec![nid1]).unwrap();
 

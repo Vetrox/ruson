@@ -1,5 +1,7 @@
-use crate::nodes::node::{Node, SoNError};
+use crate::nodes::node::{Node, NodeKind, SoNError};
+use crate::typ::typ::Typ;
 use std::ops::{Deref, DerefMut};
+use std::sync::atomic::Ordering;
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -27,6 +29,25 @@ impl Graph {
 
     pub fn new() -> Graph {
         Self::from(vec![])
+    }
+
+    pub fn new_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
+        let index = self.find_first_empty_cell();
+        let node = Node::new(node_kind, crate::nodes::node::GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), index, typ);
+        let inputs_c = inputs.clone();
+        self.add_reverse_dependencies_br(index, &inputs_c)?;
+        if index == self.len() {
+            self.push(None);
+        }
+        self[index] = Some(node.clone());
+        self.add_dependencies_br(index, &inputs_c)?;
+
+        // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
+        let n = self.get_node(index)?;
+        let typ = self.compute_refined_typ(n)?;
+        self.get_node_mut(index)?.refine_typ(typ)?;
+
+        Ok(index)
     }
 
     /// automatically filters for None elements

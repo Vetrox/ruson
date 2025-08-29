@@ -1,5 +1,5 @@
 use crate::nodes::node::SoNError::VariableUndefined;
-use crate::nodes::node::{Graph, Node, NodeKind, SoNError};
+use crate::nodes::node::{Graph, NodeKind, SoNError};
 use crate::services::dotvis::as_dotfile;
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
@@ -137,7 +137,7 @@ impl Parser {
         for input in inputs.iter() {
             self.unkeep_node(*input)?;
         }
-        let mut nid = Node::new(self.graph.clone(), inputs, node_kind, typ)?;
+        let mut nid = self.graph.clone().borrow_mut().new_node(inputs, node_kind, typ)?;
         if self.do_optimize {
             nid = self.peephole(nid)?;
             self.keep_node(nid)?;
