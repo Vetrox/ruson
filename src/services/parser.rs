@@ -82,14 +82,18 @@ impl Parser {
         self.lexer.input.clone()
     }
 
-    /// a.k.a. garbage collect for the java stans
-    fn drop_unused_nodes_cap(&mut self, cap: usize) {
+    /// a.k.a. garbage collect for the java stans.
+    /// Returns the number of deleted nodes
+    fn drop_unused_nodes_cap(&mut self, mut cap: usize) -> usize {
+        let original_cap = cap;
         let len = self.graph.len();
         for nid in 0..len {
-            self.attempt_drop_node(nid, cap);
+            cap -= self.attempt_drop_node(nid, cap);
         }
+        original_cap - cap
     }
 
+    /// returns cap - number_of_deleted_nodes
     fn attempt_drop_node(&mut self, nid: usize, cap: usize) -> usize {
         if nid == KEEP_ALIVE_NID {
             return 0;
@@ -119,9 +123,10 @@ impl Parser {
         cap - c
     }
 
-    fn drop_unused_nodes(&mut self) {
-        self.drop_unused_nodes_cap(100);
+    fn drop_unused_nodes(&mut self) -> usize {
+        self.drop_unused_nodes_cap(100)
     }
+
     fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
         let pr = format!("add_node inputs: {:?}, node_kind: {:?}, typ: {:?}", inputs, node_kind, typ);
         println!("{}", pr);
@@ -182,11 +187,16 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
-        let node = self.parse_block()?;
+        let nid = self.parse_block()?;
         if !self.lexer.is_eof() {
             return Err(SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
         }
-        Ok(node)
+        self.keep_node(nid)?;
+        while self.drop_unused_nodes() > 0 {
+            println!("Dropping unused nodes...");
+        }
+        self.unkeep_node(nid)?;
+        Ok(nid)
     }
 
     /// <pre>
@@ -455,10 +465,9 @@ mod tests {
 
         // Act
         let _result = parser.parse().unwrap();
-        parser.drop_unused_nodes();
 
         // Assert
-        assert_eq!(3, parser.graph.iter().filter(|n| n.is_some()).count());
+        assert_eq!(5, parser.graph.iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
@@ -470,9 +479,10 @@ mod tests {
 
         // Act
         let _result = parser.parse().unwrap();
-        parser.drop_unused_nodes_cap(0);
+        let dropped_nodes = parser.drop_unused_nodes_cap(0);
 
         // Assert
+        assert_eq!(0, dropped_nodes);
         assert_eq!(5, parser.graph.iter().filter(|n| n.is_some()).count());
     }
 
@@ -484,9 +494,10 @@ mod tests {
 
         // Act
         let _result = parser.parse().unwrap();
-        parser.drop_unused_nodes_cap(1);
+        let dropped_nodes = parser.drop_unused_nodes_cap(1);
 
         // Assert
+        assert_eq!(1, dropped_nodes);
         assert_eq!(4, parser.graph.iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
