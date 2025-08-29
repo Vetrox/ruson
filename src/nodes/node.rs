@@ -10,6 +10,7 @@ static GLOBAL_NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug)]
 #[derive(Clone)]
 pub struct Node {
+    /// for Display trait we need to be able to traverse the whole graph.
     graph: Rc<RefCell<Vec<Option<Node>>>>,
     pub node_kind: NodeKind,
     /// ordered list of def`s this Node is depending on
