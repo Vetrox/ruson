@@ -699,4 +699,28 @@ mod tests {
         let node = parser.graph.get(result).unwrap().as_ref().unwrap();
         assert_eq!("return 1;", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
+
+    #[test]
+    fn should_return_error_on_variable_redefinition() {
+        // Arrange
+        let mut parser = Parser::new("int a=1;int a=1;").unwrap();
+
+        // Act
+        let result = parser.parse();
+
+        // Assert
+        assert!(matches!(result, Err(SoNError::VariableRedefinition { variable: v }) if v == "a"));
+    }
+
+    #[test]
+    fn should_return_error_on_undefined_variable() {
+        // Arrange
+        let mut parser = Parser::new("a=1;").unwrap();
+
+        // Act
+        let result = parser.parse();
+
+        // Assert
+        assert!(matches!(result, Err(SoNError::VariableUndefined { variable: v }) if v == "a"));
+    }
 }
