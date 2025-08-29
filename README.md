@@ -1,6 +1,6 @@
 # Sea of Nodes - Simple
 
-This is a rust implementation of the Sea of Nodes - Simple example.
+This is a rust implementation of the [Sea of Nodes - Simple](https://github.com/SeaOfNodes/Simple) example.
 
 # Sea of Nodes
 
