@@ -147,6 +147,9 @@ impl Parser {
         remove_dependency(self.graph.clone(), KEEP_ALIVE_NID, nid)
     }
 
+    /// <pre>
+    /// expr : additiveExpr
+    /// </pre>
     fn parse_expression(&mut self) -> Result<usize, SoNError> {
         self.parse_addition()
     }
