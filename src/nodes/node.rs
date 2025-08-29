@@ -267,21 +267,18 @@ impl Node {
     /// returns whether this node is associated with the control flow graph
     pub fn is_cfg(&self) -> bool {
         match self.node_kind {
-            NodeKind::Constant => {}
-            NodeKind::Return => {}
-            NodeKind::Start => {}
-            NodeKind::KeepAlive => {}
-            NodeKind::Add => {}
-            NodeKind::Sub => {}
-            NodeKind::Mul => {}
-            NodeKind::Div => {}
-            NodeKind::Minus => {}
-            NodeKind::Scope { .. } => {}
-        }
-        match self.node_kind {
             NodeKind::Return
-            | NodeKind::Start => true,
-            _ => false
+            | NodeKind::Start
+            => true,
+            NodeKind::Constant
+            | NodeKind::KeepAlive
+            | NodeKind::Add
+            | NodeKind::Sub
+            | NodeKind::Mul
+            | NodeKind::Div
+            | NodeKind::Minus
+            | NodeKind::Scope { .. }
+            => false
         }
     }
 }

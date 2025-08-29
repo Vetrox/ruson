@@ -4,19 +4,6 @@ use crate::typ::typ::Typ;
 impl Graph {
     pub fn compute_refined_typ(&self, node: &Node) -> Result<Typ, SoNError> {
         match node.node_kind {
-            NodeKind::Constant => {}
-            NodeKind::Return => {}
-            NodeKind::Start => {}
-            NodeKind::KeepAlive => {}
-            NodeKind::Add => {}
-            NodeKind::Sub => {}
-            NodeKind::Mul => {}
-            NodeKind::Div => {}
-            NodeKind::Minus => {}
-            NodeKind::Scope { .. } => {}
-        }
-
-        match node.node_kind {
             NodeKind::Add => {
                 let lhs = self.get_node(*node.inputs.get(0).unwrap())?;
                 let rhs = self.get_node(*node.inputs.get(1).unwrap())?;
@@ -61,7 +48,12 @@ impl Graph {
                 }
                 Ok(node.typ())
             }
-            _ => Ok(node.typ())
+            NodeKind::Constant
+            | NodeKind::Return
+            | NodeKind::Start
+            | NodeKind::KeepAlive
+            | NodeKind::Scope { .. }
+            => Ok(node.typ())
         }
     }
 }
