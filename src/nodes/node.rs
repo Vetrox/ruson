@@ -132,10 +132,10 @@ impl Node {
         node_kind: NodeKind,
         typ: Typ,
     ) -> Result<usize, SoNError> {
-        let index = find_first_empty_cell(&graph);
+        let mut graph_br = graph.borrow_mut();
+        let index = find_first_empty_cell(graph_br.as_ref());
         let node = Node { graph: graph.clone(), node_kind, inputs: vec![], outputs: vec![], uid: GLOBAL_NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst), nid: index, typ };
         let inputs_c = inputs.clone();
-        let mut graph_br = graph.borrow_mut();
         add_reverse_dependencies_br(graph_br.as_mut(), index, &inputs_c)?;
         if index == graph_br.len() {
             graph_br.push(None);
@@ -187,15 +187,16 @@ impl Node {
     }
 }
 
-pub fn find_first_empty_cell(graph: &Rc<RefCell<Vec<Option<Node>>>>) -> usize {
-    let g = graph.borrow();
-    let index = g.iter().enumerate().find_map(|(i, x)| {
+pub fn find_first_empty_cell(
+    graph_br: &Vec<Option<Node>>,
+) -> usize {
+    let index = graph_br.iter().enumerate().find_map(|(i, x)| {
         if x.is_none() {
             Some(i)
         } else {
             None
         }
-    }).unwrap_or_else(|| g.len());
+    }).unwrap_or_else(|| graph_br.len());
     index
 }
 
