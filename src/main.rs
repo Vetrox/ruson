@@ -9,7 +9,7 @@ pub mod services;
 pub mod typ;
 
 fn main() {
-    let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+    let mut parser = Parser::new("int a=1;int b=2; #showGraph; return a;").unwrap();
     parser.do_optimize = false;
     parser.parse().unwrap();
     fs::write("target/output.dot", as_dotfile(&parser)).expect("Unable to write file");

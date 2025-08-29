@@ -28,7 +28,9 @@ pub fn as_dotfile(parser: &Parser) -> String {
     sb.push_str("\tsubgraph cluster_Nodes {\n"); // Magic "cluster_" in the subgraph name
 
     let graph_br = parser.graph.borrow();
-    for n in iter_graph(&*graph_br).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)) {
+
+    // define normal nodes
+    for n in iter_graph(&*graph_br).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         sb.push_str("\t\t");
         sb.push_str(&format!("Node_{}", n.nid));
         sb.push_str(" [ ");
@@ -45,9 +47,35 @@ pub fn as_dotfile(parser: &Parser) -> String {
     }
     sb.push_str("\t}\n");     // End Node cluster
 
+    // define the scope node
+    if let NodeKind::Scope { scopes } = &get_node(&graph_br, SCOPE_NID).unwrap().node_kind {
+        sb.push_str("\tnode [shape=plaintext];\n");
+        for (level, scope) in scopes.iter().enumerate() {
+            sb.push_str("\tsubgraph cluster_");
+            let scope_name = format!("Node_{}_{}", SCOPE_NID, level);
+            sb.push_str(&scope_name);
+            sb.push_str(" {\n\t\t");
+            sb.push_str(&scope_name);
+            sb.push_str(" [label=<\n\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">\n\t\t\t<TR><TD BGCOLOR=\"cyan\">");
+            sb.push_str(&format!("{}", level));
+            sb.push_str("</TD>");
+            let mut keys: Vec<_> = scope.keys().collect();
+            keys.sort();
+            for name in keys {
+                sb.push_str("<TD PORT=\"");
+                sb.push_str(&format!("{}_{}", scope_name, name));
+                sb.push_str("\">");
+                sb.push_str(&format!("{}", name));
+                sb.push_str("</TD>");
+            }
+            sb.push_str("</TR>\n\t\t\t</TABLE>>];\n");
+        }
+        sb.push_str(&"\t}\n".repeat(scopes.len()));
+    }
+
     // Walk the Node edges
     sb.push_str("\tedge [ fontname=Helvetica, fontsize=8 ];\n");
-    for n in iter_graph(&*graph_br).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive)) {
+    for n in iter_graph(&*graph_br).filter(|n| !matches!(n.node_kind, NodeKind::KeepAlive | NodeKind::Scope {..})) {
         // In this chapter we do display the Constant->Start edge;
         for (i, def_nid) in n.inputs.iter().enumerate() {
             //if (def != null) { TODO: currently we do NOT allow for Optionals in the inputs, which needs to be supported in the future.
@@ -70,27 +98,20 @@ pub fn as_dotfile(parser: &Parser) -> String {
         }
     }
 
-    if let NodeKind::Scope { scopes } = &get_node(&graph_br, SCOPE_NID).unwrap().node_kind {
-        sb.push_str("\tnode [shape=plaintext];\n");
+    // Walk the variable definitions
+    sb.push_str("\tedge [style=dashed color=cornflowerblue];\n");
+    let scope_node = get_node(&graph_br, SCOPE_NID).unwrap();
+    if let NodeKind::Scope { scopes } = &scope_node.node_kind {
         for (level, scope) in scopes.iter().enumerate() {
-            sb.push_str("\tsubgraph cluster_");
-            let scope_name = format!("Node_{}", SCOPE_NID);
-            sb.push_str(&scope_name);
-            sb.push_str(" {\n\t\t");
-            sb.push_str(&scope_name);
-            sb.push_str(" [label=<\n\t\t\t<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">\n\t\t\t<TR><TD BGCOLOR=\"cyan\">");
-            sb.push_str(&format!("{}", level));
-            sb.push_str("</TD>");
-            for name in scope.keys() {
-                sb.push_str("<TD PORT=\"");
-                sb.push_str(&format!("{}_{}", scope_name, name));
-                sb.push_str("\">");
-                sb.push_str(&format!("{}", name));
-                sb.push_str("</TD>");
+            let scope_name = format!("Node_{}_{}", SCOPE_NID, level);
+            for (name, def_nid) in scope {
+                sb.push('\t');
+                sb.push_str(&format!("{}:\"{}_{}\"", scope_name, scope_name, name));
+                sb.push_str(" -> ");
+                sb.push_str(&format!("Node_{}", def_nid));
+                sb.push_str(";\n");
             }
-            sb.push_str("</TR>\n\t\t\t</TABLE>>];\n");
         }
-        sb.push_str(&"\t}\n".repeat(scopes.len()));
     }
 
     sb.push_str("}\n");

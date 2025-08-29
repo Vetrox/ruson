@@ -1,5 +1,6 @@
 use crate::nodes::node::SoNError::VariableUndefined;
 use crate::nodes::node::{add_dependencies, add_reverse_dependencies, get_node, get_node_mut, remove_dependency, remove_dependency_br, Node, NodeKind, SoNError};
+use crate::services::dotvis::as_dotfile;
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::Bot;
@@ -220,6 +221,9 @@ impl Parser {
     ///   exprStatement: identifier '=' expression ';'
     /// </pre>
     fn parse_statement(&mut self) -> Result<usize, SoNError> {
+        if self.lexer.matsch("#showGraph;") {
+            println!("#showGraph@{}\n{}", self.lexer.dbg_position(), as_dotfile(&self));
+        }
         if self.lexer.peek_matschx("return") {
             return self.parse_return_stmnt();
         }

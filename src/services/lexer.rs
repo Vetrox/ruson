@@ -24,6 +24,33 @@ impl Lexer {
         Lexer::from_string(String::from(input))
     }
 
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
+    pub fn dbg_position(&self) -> String {
+        if let Some((line, column)) = self.line_col_for(self.position()) {
+            format!("{}:{}", line, column)
+        } else {
+            "out of bounds".into()
+        }
+    }
+
+    pub fn line_col_for(&self, position: usize) -> Option<(usize, usize)> {
+        let mut line_start = 0;
+        for (line_number, line) in self.input.lines().enumerate() {
+            let line_len = line.len();
+            if position <= line_start + line_len {
+                let column = position - line_start;
+                return Some((line_number + 1, column + 1)); // 1-based
+            }
+            // '\n'
+            line_start += line_len + 1;
+        }
+        None
+    }
+
+
     pub fn is_eof(&self) -> bool { self.position >= self.input.len() }
 
     pub fn peek(&self) -> Option<char> { self.input.chars().nth(self.position) }
@@ -253,6 +280,32 @@ mod tests {
         // Assert
         assert!(m);
         assert_eq!(4, lexer.position);
+    }
+
+    #[test]
+    fn should_get_line_col() {
+        // Arrange
+        let mut lexer = Lexer::from_str("01\n34\n6");
+        lexer.position = 4;
+
+        // Act
+        let result = lexer.dbg_position();
+
+        // Assert
+        assert_eq!("2:2", result);
+    }
+
+    #[test]
+    fn should_get_line_col_oob() {
+        // Arrange
+        let mut lexer = Lexer::from_str("01\n34\n6");
+        lexer.position = 123;
+
+        // Act
+        let result = lexer.dbg_position();
+
+        // Assert
+        assert_eq!("out of bounds", result);
     }
 }
 
