@@ -1,5 +1,5 @@
 use crate::nodes::node::SoNError::VariableUndefined;
-use crate::nodes::node::{add_dependencies_br, add_reverse_dependencies_br, get_node, get_node_mut, remove_dependency_br, Node, NodeKind, SoNError};
+use crate::nodes::node::{add_dependencies_br, add_reverse_dependencies_br, get_node, get_node_mut, remove_dependency_br, Graph, Node, NodeKind, SoNError};
 use crate::services::dotvis::as_dotfile;
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
@@ -17,7 +17,7 @@ pub static KEYWORDS: Lazy<HashSet<String>> = Lazy::new(|| {
 
 pub struct Parser {
     lexer: Lexer,
-    pub graph: Rc<RefCell<Vec<Option<Node>>>>,
+    pub graph: Rc<RefCell<Graph>>,
     /// peephole optimization
     pub do_optimize: bool,
 }
@@ -28,7 +28,7 @@ pub(crate) const SCOPE_NID: usize = 2;
 
 impl Parser {
     pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Rc::new(RefCell::new(vec![])), do_optimize: true };
+        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Rc::new(RefCell::new(Graph::new())), do_optimize: true };
         ctx.add_node_unrefined(vec![], NodeKind::KeepAlive)?;
         let ctrl = ctx.add_node_unrefined(vec![], NodeKind::Start)?;
         assert_eq!(CTRL_NID, ctrl);
@@ -42,7 +42,7 @@ impl Parser {
 
     fn get_var(&mut self, name: &str) -> Result<Option<usize>, SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.g.as_mut(), SCOPE_NID)?.node_kind {
             if let Some(scope) = scopes.last_mut() {
                 return Ok(scope.get(name.into()).copied());
             }
@@ -53,10 +53,10 @@ impl Parser {
 
     fn define_var(&mut self, name: &str, nid: usize) -> Result<(), SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        add_reverse_dependencies_br(graph_br.as_mut(), SCOPE_NID, &vec![nid])?;
-        add_dependencies_br(graph_br.as_mut(), SCOPE_NID, &vec![nid])?;
+        add_reverse_dependencies_br(graph_br.g.as_mut(), SCOPE_NID, &vec![nid])?;
+        add_dependencies_br(graph_br.g.as_mut(), SCOPE_NID, &vec![nid])?;
 
-        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.g.as_mut(), SCOPE_NID)?.node_kind {
             if let Some(scope) = scopes.last_mut() {
                 if scope.insert(name.into(), nid).is_some() {
                     panic!("Variable was already defined. Undefine it first.");
@@ -70,10 +70,10 @@ impl Parser {
 
     fn undefine_var(&mut self, name: &str) -> Result<usize, SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.g.as_mut(), SCOPE_NID)?.node_kind {
             if let Some(scope) = scopes.last_mut() {
                 if let Some(nid) = scope.remove(name.into()) {
-                    remove_dependency_br(graph_br.as_mut(), SCOPE_NID, nid)?;
+                    remove_dependency_br(graph_br.g.as_mut(), SCOPE_NID, nid)?;
                     return Ok(nid);
                 }
                 panic!("Tried to undefine not-defined var.")
@@ -89,7 +89,7 @@ impl Parser {
 
     /// a.k.a. garbage collect for the java stans
     fn drop_unused_nodes_cap(&mut self, cap: usize) {
-        let len = self.graph.borrow().len();
+        let len = self.graph.borrow().g.len();
         for nid in 0..len {
             self.attempt_drop_node(nid, cap);
         }
@@ -102,23 +102,23 @@ impl Parser {
         if cap <= 0 {
             return 0;
         }
-        let inputs = self.graph.borrow_mut().get(nid).map(|n| match n.as_ref() {
+        let inputs = self.graph.borrow_mut().g.get(nid).map(|n| match n.as_ref() {
             Some(node) if node.outputs.is_empty() => node.inputs.clone(),
             _ => vec![]
         });
         let mut c = cap;
         if let Some(inputs) = inputs {
             for neigh in inputs.into_iter() {
-                if let Some(Some(n)) = self.graph.borrow_mut().get_mut(neigh) {
+                if let Some(Some(n)) = self.graph.borrow_mut().g.get_mut(neigh) {
                     n.outputs.retain(|&k| k != nid);
                 }
                 c -= self.attempt_drop_node(neigh, c);
             }
         }
         if c > 0 {
-            if matches!(self.graph.borrow_mut().get_mut(nid), Some(Some(n)) if n.outputs.is_empty()) {
+            if matches!(self.graph.borrow_mut().g.get_mut(nid), Some(Some(n)) if n.outputs.is_empty()) {
                 c -= 1;
-                *self.graph.borrow_mut().get_mut(nid).unwrap() = None;
+                *self.graph.borrow_mut().g.get_mut(nid).unwrap() = None;
             };
         }
         cap - c
@@ -151,7 +151,7 @@ impl Parser {
     /// The caller can just use the returned nid instead of the input nid.
     fn peephole(&mut self,
                 mut nid: usize) -> Result<usize, SoNError> {
-        let node = get_node(self.graph.borrow().as_ref(), nid)?.clone();
+        let node = get_node(self.graph.borrow().g.as_ref(), nid)?.clone();
         if node.typ().is_constant() && !matches!(node.node_kind, NodeKind::Constant) {
             assert!(node.outputs.is_empty()); // otherwise it won't get gc-collected
             nid = self.add_node(vec![], NodeKind::Constant, node.typ())?; // T_CONSTPROP
@@ -166,7 +166,7 @@ impl Parser {
 
     fn push_scope(&mut self) -> Result<(), SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.as_mut(), SCOPE_NID)?.node_kind {
+        if let NodeKind::Scope { scopes } = &mut get_node_mut(graph_br.g.as_mut(), SCOPE_NID)?.node_kind {
             scopes.push(HashMap::new());
             return Ok(())
         }
@@ -175,14 +175,14 @@ impl Parser {
 
     fn pop_scope(&mut self) -> Result<(), SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        let node = get_node_mut(graph_br.as_mut(), SCOPE_NID)?;
+        let node = get_node_mut(graph_br.g.as_mut(), SCOPE_NID)?;
         if let NodeKind::Scope { scopes } = &mut node.node_kind {
             if let Some(scope) = scopes.pop() {
                 let defined_nids: Values<String, usize> = scope.values();
                 drop(graph_br);
                 let mut graph_br = self.graph.borrow_mut(); // Reborrow mutably
                 for &dep_nid in defined_nids {
-                    remove_dependency_br(graph_br.as_mut(), SCOPE_NID, dep_nid)?;
+                    remove_dependency_br(graph_br.g.as_mut(), SCOPE_NID, dep_nid)?;
                 }
                 return Ok(());
             }
@@ -290,13 +290,13 @@ impl Parser {
 
     fn keep_node(&mut self, nid: usize) -> Result<(), SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        add_reverse_dependencies_br(graph_br.as_mut(), KEEP_ALIVE_NID, &vec![nid])?;
-        add_dependencies_br(graph_br.as_mut(), KEEP_ALIVE_NID, &vec![nid])
+        add_reverse_dependencies_br(graph_br.g.as_mut(), KEEP_ALIVE_NID, &vec![nid])?;
+        add_dependencies_br(graph_br.g.as_mut(), KEEP_ALIVE_NID, &vec![nid])
     }
 
     fn unkeep_node(&mut self, nid: usize) -> Result<(), SoNError> {
         let mut graph_br = self.graph.borrow_mut();
-        remove_dependency_br(graph_br.as_mut(), KEEP_ALIVE_NID, nid)
+        remove_dependency_br(graph_br.g.as_mut(), KEEP_ALIVE_NID, nid)
     }
 
     /// <pre>
@@ -423,8 +423,8 @@ mod tests {
         let parser = Parser::new("return 1;").unwrap();
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().len());
-        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(3, parser.graph.borrow().g.len());
+        assert!(matches!( parser.graph.borrow_mut().g.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -437,20 +437,20 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let g = parser.graph.borrow_mut();
-        let node = g.get(result).unwrap().as_ref().unwrap();
+        let graph_br = parser.graph.borrow_mut();
+        let node = graph_br.g.get(result).unwrap().as_ref().unwrap();
         assert!(matches!(node.node_kind, NodeKind::Return));
         assert!(matches!(node.outputs.as_slice(), []));
         match node.inputs.as_slice() {
             [CTRL_NID, x] => {
-                let dnode = g.get(*x).unwrap().as_ref().unwrap();
+                let dnode = graph_br.g.get(*x).unwrap().as_ref().unwrap();
                 assert!(matches!(dnode.typ(), Typ::Int { constant: 1 }));
                 assert!(matches!(dnode.outputs.as_slice(), [y] if y.eq(&result) ));
             }
             _ => assert!(false)
         }
         let my_node = node.clone();
-        drop(g);
+        drop(graph_br);
         println!("Parsing result is: {}", my_node);
     }
 
@@ -465,8 +465,8 @@ mod tests {
         parser.drop_unused_nodes();
 
         // Assert
-        assert_eq!(3, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
+        assert_eq!(3, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().g.get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
     #[test]
@@ -480,7 +480,7 @@ mod tests {
         parser.drop_unused_nodes_cap(0);
 
         // Assert
-        assert_eq!(5, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
+        assert_eq!(5, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
     }
 
     #[test]
@@ -494,8 +494,8 @@ mod tests {
         parser.drop_unused_nodes_cap(1);
 
         // Assert
-        assert_eq!(4, parser.graph.borrow().iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.borrow_mut().get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(4, parser.graph.borrow().g.iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.borrow_mut().g.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
@@ -548,7 +548,7 @@ mod tests {
         let _result = parser.parse();
 
         // Assert
-        assert!(!node_exists_unique(&parser.graph.borrow(), nid, nid));
+        assert!(!node_exists_unique(&parser.graph.borrow().g, nid, nid));
     }
 
     #[test]
@@ -561,7 +561,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1+1);", format!("{:}", node));
     }
 
@@ -575,7 +575,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1-1);", format!("{:}", node));
     }
 
@@ -589,7 +589,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1*1);", format!("{:}", node));
     }
 
@@ -603,7 +603,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1/1);", format!("{:}", node));
     }
 
@@ -617,7 +617,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return ((1*2)+3);", format!("{:}", node));
     }
 
@@ -631,7 +631,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1*(2*3));", format!("{:}", node));
     }
 
@@ -645,7 +645,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return (1+((2*3)+(-5)));", format!("{:}", node));
     }
 
@@ -658,7 +658,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return 2;", format!("{:}", node));
     }
 
@@ -675,9 +675,9 @@ mod tests {
         // Assert
         let graph_br = parser.graph.borrow();
 
-        assert!(matches!(get_node(graph_br.as_ref(), nid).unwrap().outputs.as_slice(), [a] if a == &SCOPE_NID));
-        assert!(matches!(get_node(graph_br.as_ref(), SCOPE_NID).unwrap().inputs.as_slice(), [a] if a == &nid));
-        if let NodeKind::Scope { scopes } = &get_node(graph_br.as_ref(), SCOPE_NID).unwrap().node_kind {
+        assert!(matches!(get_node(graph_br.g.as_ref(), nid).unwrap().outputs.as_slice(), [a] if a == &SCOPE_NID));
+        assert!(matches!(get_node(graph_br.g.as_ref(), SCOPE_NID).unwrap().inputs.as_slice(), [a] if a == &nid));
+        if let NodeKind::Scope { scopes } = &get_node(graph_br.g.as_ref(), SCOPE_NID).unwrap().node_kind {
             if let [ map ] = scopes.as_slice() && let Some(a) = map.get("x") && a == &nid {
                 return;
             }
@@ -694,7 +694,7 @@ mod tests {
         let result = parser.parse().unwrap();
 
         // Assert
-        let node = parser.graph.borrow_mut().get(result).unwrap().as_ref().unwrap().clone();
+        let node = parser.graph.borrow_mut().g.get(result).unwrap().as_ref().unwrap().clone();
         assert_eq!("return 1;", format!("{:}", node));
     }
 }
