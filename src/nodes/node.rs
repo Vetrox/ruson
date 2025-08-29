@@ -137,19 +137,15 @@ impl Node {
         let inputs_c = inputs.clone();
         let mut graph_br = graph.borrow_mut();
         add_reverse_dependencies_br(graph_br.as_mut(), index, &inputs_c)?;
-        drop(graph_br);
-        if index == graph.borrow().len() {
-            graph.borrow_mut().push(None);
+        if index == graph_br.len() {
+            graph_br.push(None);
         }
-        graph.borrow_mut()[index] = Some(node.clone());
-        add_dependencies_br(graph.borrow_mut().as_mut(), index, &inputs_c)?;
+        graph_br[index] = Some(node.clone());
+        add_dependencies_br(graph_br.as_mut(), index, &inputs_c)?;
 
         // refine the node typ immediately. This sets the refined typ but doesn't optimize anything.
-        let graph_br = graph.borrow();
         let n = get_node(graph_br.as_ref(), index)?;
-        let typ = compute_refined_typ(&*graph.borrow(), n)?;
-        drop(graph_br);
-        let mut graph_br = graph.borrow_mut();
+        let typ = compute_refined_typ(graph_br.as_ref(), n)?;
         get_node_mut(graph_br.as_mut(), index)?.refine_typ(typ)?;
 
         Ok(index)
