@@ -138,7 +138,7 @@ impl Parser {
         self.drop_unused_nodes_cap(100)
     }
 
-    fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
+    pub(crate) fn add_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
         let pr = format!("add_node inputs: {:?}, node_kind: {:?}, typ: {:?}", inputs, node_kind, typ);
         println!("{}", pr);
         for input in inputs.iter() {
@@ -158,20 +158,21 @@ impl Parser {
         Ok(nid)
     }
 
+    pub(crate) fn add_node_unrefined(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
+        self.add_node(inputs, node_kind, Bot)
+    }
+
     /// Possibly creates a new node that this node needs to be replaced with.
     /// The caller can just use the returned nid instead of the input nid.
     fn peephole(&mut self, mut nid: usize) -> Result<usize, SoNError> {
-        let node = self.graph.get_node(nid)?;
+        let node = self.graph.get_node(nid)?.clone();
         if node.typ().is_constant() && !matches!(node.node_kind, NodeKind::Constant) {
             assert!(node.outputs.is_empty()); // otherwise it won't get gc-collected
             nid = self.add_node(vec![], NodeKind::Constant, node.typ())?; // T_CONSTPROP
         }
+
+        nid = self.idealize_node(nid)?;
         Ok(nid)
-    }
-
-
-    fn add_node_unrefined(&mut self, inputs: Vec<usize>, node_kind: NodeKind) -> Result<usize, SoNError> {
-        self.add_node(inputs, node_kind, Bot)
     }
 
     fn ctrl(&self) -> usize {
@@ -469,7 +470,7 @@ mod tests {
         assert!(matches!(node.node_kind, NodeKind::Return));
         assert!(matches!(node.outputs.as_slice(), []));
         match node.inputs.as_slice() {
-            [CTRL_NID, x] => {
+            [_, x] => {
                 let dnode = parser.graph.get(*x).unwrap().as_ref().unwrap();
                 assert!(matches!(dnode.typ(), Typ::Int { constant: 1 }));
                 assert!(matches!(dnode.outputs.as_slice(), [y] if y.eq(&result) ));

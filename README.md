@@ -41,7 +41,13 @@ $\top \equiv$ all possible choices (constants). We can choose any value, as conv
 
 # Optimization techniques
 
-| ID          | Short explanation             |
-|-------------|-------------------------------|
-| T_CONSTFLD  | `Typ(#1+#2)=Typ(#3)`          |
-| T_CONSTPROP | Infer types through def edges |
+| ID                | Short explanation                                    |
+|-------------------|------------------------------------------------------|
+| T_CONSTFLD        | `Typ(#1+#2)=Typ(#3)`                                 |
+| T_CONSTPROP       | Infer types through def edges                        |
+| T_ARITH_IDENT     | Add of 0, Mul by 1, Div by 1, Sub by 0               |
+| T_ADD_SAME        | a + a => 2a                                          |
+| T_LEFT_SPINE      | Adds are all on the left                             |
+| T_ASSOCIATIVITY   | x + (a + b) => (x + a) + b                           |
+| T_CANONIC_INC_NID | Order operands in strictly increasing unique node id |
+| T_RIGHT_CONST     | (x + con1) + con2 => x + (con1 + con2)               |
