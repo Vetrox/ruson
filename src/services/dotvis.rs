@@ -87,7 +87,7 @@ impl Parser {
                     sb.push_str(&format!("{}", i));
                     if matches!(n.node_kind, NodeKind::Constant {..}) && matches!(def.node_kind, NodeKind::Start {..}) {
                         sb.push_str(" style=dotted");
-                    } else if def.bind(&self.graph).is_cfg() {   // control edges are colored red
+                    } else if def.bind(&self.graph).is_cfg() && (!matches!(n.node_kind, NodeKind::Proj {..}) || matches!(n.typ(), Typ::Ctrl)) {   // control edges are colored red
                         sb.push_str(" color=red");
                     }
                     sb.push_str("];\n");

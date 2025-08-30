@@ -204,10 +204,12 @@ impl Parser {
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
         self.push_scope()?;
-        let ctrl_node = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 0, _dbg_proj_label: "$ctrl".into() })?;
-        let arg_node = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 1, _dbg_proj_label: "arg".into() })?;
-        self.define_var("$ctrl", ctrl_node)?;
-        self.define_var("arg", arg_node)?;
+        let ctrl_nid = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 0, _dbg_proj_label: "$ctrl".into() })?;
+        let arg_nid = self.with_kept_node(ctrl_nid, |parser| {
+            parser.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 1, _dbg_proj_label: "arg".into() })
+        })?;
+        self.define_var("$ctrl", ctrl_nid)?;
+        self.define_var("arg", arg_nid)?;
         let nid = self.parse_block()?;
         self.pop_scope()?;
 
@@ -745,5 +747,25 @@ mod tests {
 
         // Assert
         assert!(matches!(result, Err(SoNError::VariableUndefined { variable: v }) if v == "a"));
+    }
+
+    #[test]
+    fn should_have_ctrl_and_arg_defined() {
+        // Arrange
+        let mut parser = Parser::new("return arg;", 84).unwrap();
+        parser.do_optimize = false;
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.get_node(result).unwrap();
+        let ctrl = parser.graph.get_node(*node.inputs.get(0).unwrap()).unwrap().clone();
+        let arg = parser.graph.get_node(*node.inputs.get(1).unwrap()).unwrap().clone();
+
+        assert!(matches!(ctrl.node_kind, NodeKind::Proj {..}));
+        assert!(matches!(arg.node_kind, NodeKind::Proj {..}));
+        assert!(matches!(ctrl.typ(), Typ::Ctrl));
+        assert!(matches!(arg.typ(), Typ::Int { constant: 84 }));
     }
 }

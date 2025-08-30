@@ -62,7 +62,7 @@ impl Node {
         if !self.typ.transition_allowed(&typ) {
             return Err(SoNError::TypTransitionNotAllowed);
         }
-        println!("Node {:?} node_kind: {:?}, typ: {:?} -> {:?}", self.nid, self.node_kind, self.typ, typ);
+        println!("Node {:?} ({:?}) node_kind: {:?}, typ: {:?} -> {:?}", self.nid, self.uid, self.node_kind, self.typ, typ);
         self.typ = typ;
         Ok(())
     }
