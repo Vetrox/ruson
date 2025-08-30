@@ -13,6 +13,8 @@ the [HotSpot JIT](https://github.com/openjdk/jdk/tree/master/src/hotspot/share/o
 
 # Lattices
 
+![](Lattice.png)
+
 $\bot \leq \mathcal{Int} \leq \top$
 
 $\mathrm{join}(a, b) = \mathrm{min} \left \lbrace e: a\leq e \wedge b \leq e \right \rbrace$
@@ -27,7 +29,11 @@ $\mathrm{join}(\bot, \top) = \mathrm{min} \left \lbrace e: \bot \leq e \wedge \t
 
 $\mathrm{meet}(\bot, \top) = \mathrm{max} \left \lbrace e: e \leq \bot \wedge e \leq \top \right \rbrace = \bot$
 
-# Intuition
+### Meet & Join Use The Paths
+
+![](LatticeAnnotated.png)
+
+## Intuition
 
 $\bot$ is treated as an unknown value. We have to honor what the programmer wrote and emit the code.
 
