@@ -48,6 +48,14 @@ impl Graph {
                 }
                 Ok(node.typ())
             }
+            NodeKind::Proj { proj_index, .. } => {
+                let lhs = self.get_node(*node.inputs.get(0).unwrap())?;
+
+                if let Typ::Tuple { typs } = lhs.typ() {
+                    return Ok(typs.get(proj_index).unwrap().clone());
+                }
+                Ok(node.typ())
+            }
             NodeKind::Constant
             | NodeKind::Return
             | NodeKind::Start

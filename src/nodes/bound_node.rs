@@ -17,6 +17,25 @@ impl<'a> BoundNode<'a> {
     pub fn from(&self, other: &'a Node) -> BoundNode<'a> {
         Self::new(other, self.graph)
     }
+
+    /// returns whether this node is associated with the control flow graph
+    pub fn is_cfg(&self) -> bool {
+        match self.node_kind {
+            NodeKind::Return
+            | NodeKind::Start
+            => true,
+            NodeKind::Constant
+            | NodeKind::KeepAlive
+            | NodeKind::Add
+            | NodeKind::Sub
+            | NodeKind::Mul
+            | NodeKind::Div
+            | NodeKind::Minus
+            | NodeKind::Scope { .. }
+            => false,
+            NodeKind::Proj { proj_index, _dbg_proj_label: _ } => proj_index == 0 /*&& matches!(self.graph.get_node(*self.inputs.get(proj_index).unwrap()).unwrap().node_kind, NodeKind::If)*/,
+        }
+    }
 }
 
 impl Deref for BoundNode<'_> {
@@ -94,6 +113,9 @@ impl Display for BoundNode<'_> {
                     write!(f, "]")?;
                 }
                 write!(f, ")")?;
+            }
+            NodeKind::Proj { _dbg_proj_label, .. } => {
+                write!(f, "{}", _dbg_proj_label)?
             }
         }
         Ok(())

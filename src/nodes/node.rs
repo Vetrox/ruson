@@ -1,3 +1,4 @@
+use crate::nodes::bound_node::BoundNode;
 pub(crate) use crate::nodes::graph::Graph;
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
@@ -33,6 +34,7 @@ pub enum NodeKind {
     Div,
     Minus,
     Scope { scopes: Vec<HashMap<String, usize>> },
+    Proj { proj_index: usize, _dbg_proj_label: String },
 }
 
 #[derive(Debug)]
@@ -65,22 +67,8 @@ impl Node {
         Ok(())
     }
 
-    /// returns whether this node is associated with the control flow graph
-    pub fn is_cfg(&self) -> bool {
-        match self.node_kind {
-            NodeKind::Return
-            | NodeKind::Start
-            => true,
-            NodeKind::Constant
-            | NodeKind::KeepAlive
-            | NodeKind::Add
-            | NodeKind::Sub
-            | NodeKind::Mul
-            | NodeKind::Div
-            | NodeKind::Minus
-            | NodeKind::Scope { .. }
-            => false
-        }
+    pub fn bind<'a>(&'a self, graph: &'a Graph) -> BoundNode<'a> {
+        BoundNode::new(&self, &graph)
     }
 }
 

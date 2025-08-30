@@ -35,7 +35,7 @@ impl Parser {
             let lab = node_icon(n);
             // control nodes have box shape
             // other nodes are ellipses, i.e. default shape
-            if n.is_cfg() {
+            if n.bind(&self.graph).is_cfg() {
                 sb.push_str("shape=box style=filled fillcolor=yellow ");
             }
             sb.push_str("label=\"");
@@ -87,7 +87,7 @@ impl Parser {
                     sb.push_str(&format!("{}", i));
                     if matches!(n.node_kind, NodeKind::Constant {..}) && matches!(def.node_kind, NodeKind::Start {..}) {
                         sb.push_str(" style=dotted");
-                    } else if def.is_cfg() {   // control edges are colored red
+                    } else if def.bind(&self.graph).is_cfg() {   // control edges are colored red
                         sb.push_str(" color=red");
                     }
                     sb.push_str("];\n");
@@ -132,6 +132,7 @@ fn node_icon(node: &Node) -> String {
         NodeKind::Div => "/".into(),
         NodeKind::Minus => "-".into(),
         NodeKind::Scope { .. } => "Scope".into(),
+        NodeKind::Proj { ref _dbg_proj_label, .. } => _dbg_proj_label.into(),
     }
 }
 
