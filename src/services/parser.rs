@@ -2,7 +2,7 @@ use crate::nodes::node::SoNError::{DebugPropagateControlFlowUpward, VariableUnde
 use crate::nodes::node::{Graph, NodeKind, SoNError};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
-use crate::typ::typ::Typ::Bot;
+use crate::typ::typ::Typ::{Bot, Ctrl};
 use once_cell::sync::Lazy;
 use std::collections::hash_map::Values;
 use std::collections::{HashMap, HashSet};
@@ -21,29 +21,40 @@ pub struct Parser {
 }
 
 pub(crate) const KEEP_ALIVE_NID: usize = 0;
-pub(crate) const CTRL_NID: usize = 1; // TODO: Introduce ScopeNode for this
-pub(crate) const SCOPE_NID: usize = 2;
+pub(crate) const SCOPE_NID: usize = 1;
+pub(crate) const START_NID: usize = 2;
 
 impl Parser {
-    pub fn new(input: &str) -> Result<Parser, SoNError> {
-        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", input)), graph: Graph::new(), do_optimize: true, _dbg_output: "".into() };
+    fn new_internal(program: &str, arg: Typ) -> Result<Parser, SoNError> {
+        let mut ctx = Parser { lexer: Lexer::from_string(format!("{{{}}}", program)), graph: Graph::new(), do_optimize: true, _dbg_output: "".into() };
         ctx.add_node_unrefined(vec![], NodeKind::KeepAlive)?;
-        let ctrl = ctx.add_node_unrefined(vec![], NodeKind::Start)?;
-        assert_eq!(CTRL_NID, ctrl);
-        ctx.keep_node(ctrl)?; // TODO: Introduce ScopeNode for this
         let scope_nid = ctx.add_node_unrefined(vec![], NodeKind::Scope { scopes: vec![] })?;
         assert_eq!(SCOPE_NID, scope_nid);
         ctx.keep_node(scope_nid)?;
+        let start_nid = ctx.add_node(vec![], NodeKind::Start, Typ::Tuple { typs: vec![Ctrl, arg] })?;
+        assert_eq!(START_NID, start_nid);
+        ctx.keep_node(start_nid)?;
 
         Ok(ctx)
     }
 
-    fn get_var(&mut self, name: &str) -> Result<Option<usize>, SoNError> {
-        if let NodeKind::Scope { scopes } = &mut self.graph.get_node_mut(SCOPE_NID)?.node_kind {
-            if let Some(scope) = scopes.last_mut() {
-                return Ok(scope.get(name.into()).copied());
+    pub fn new(program: &str, arg: i64) -> Result<Parser, SoNError> {
+        Self::new_internal(program, Typ::Int { constant: arg.clone() })
+    }
+
+    pub fn new_noarg(program: &str) -> Result<Parser, SoNError> {
+        Self::new_internal(program, Typ::IntBot)
+    }
+
+    fn get_var(&self, name: &str) -> Option<usize> {
+        if let NodeKind::Scope { scopes } = &self.graph.get_node(SCOPE_NID).expect("Scope node not present.").node_kind {
+            assert!(scopes.len() >= 1, "Tried to access scope, but none was there.");
+            for scope in scopes.iter().rev() {
+                if let Some(val) = scope.get(name.into()) {
+                    return Some(val.clone());
+                }
             }
-            panic!("Tried to access scope, but none was there.")
+            return None;
         }
         panic!("Scope node was not scope kind.")
     }
@@ -163,6 +174,10 @@ impl Parser {
         self.add_node(inputs, node_kind, Bot)
     }
 
+    fn ctrl(&self) -> usize {
+        self.get_var("$ctrl").expect("Assertion failed: $ctrl is undefined")
+    }
+
     fn push_scope(&mut self) -> Result<(), SoNError> {
         if let NodeKind::Scope { scopes } = &mut self.graph.get_node_mut(SCOPE_NID)?.node_kind {
             scopes.push(HashMap::new());
@@ -187,7 +202,14 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<usize, SoNError> {
+        self.push_scope()?;
+        let ctrl_node = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 0, _dbg_proj_label: "$ctrl".into() })?;
+        let arg_node = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 1, _dbg_proj_label: "arg".into() })?;
+        self.define_var("$ctrl", ctrl_node)?;
+        self.define_var("arg", arg_node)?;
         let nid = self.parse_block()?;
+        self.pop_scope()?;
+
         if !self.lexer.is_eof() {
             return Err(SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
         }
@@ -252,7 +274,7 @@ impl Parser {
         self.require("=")?;
         let expression = self.parse_expression()?;
         self.require(";")?;
-        if let Some(_) = self.get_var(&name)? {
+        if let Some(_) = self.get_var(&name) {
             return Err(VariableRedefinition { variable: name });
         }
         self.define_var(&name, expression)?;
@@ -267,7 +289,7 @@ impl Parser {
         self.require("=")?;
         let expression = self.parse_expression()?;
         self.require(";")?;
-        if let Some(nid) = self.get_var(&name)? {
+        if let Some(nid) = self.get_var(&name) {
             let nid1 = self.undefine_var(&name)?;
             assert_eq!(nid, nid1);
             self.define_var(&name, expression)?;
@@ -281,7 +303,7 @@ impl Parser {
         assert!(self.lexer.matschx("return"));
         let primary = self.parse_expression()?;
         self.require(";")?;
-        let ret = self.add_node_unrefined(vec![CTRL_NID, primary], NodeKind::Return);
+        let ret = self.add_node_unrefined(vec![self.ctrl(), primary], NodeKind::Return);
         ret
     }
 
@@ -378,7 +400,7 @@ impl Parser {
             return Ok(node);
         }
         let name = self.require_and_get_identifier()?;
-        if let Some(nid) = self.get_var(&name)? {
+        if let Some(nid) = self.get_var(&name) {
             Ok(nid)
         } else {
             Err(VariableUndefined { variable: name })
@@ -420,23 +442,23 @@ impl Parser {
 mod tests {
     use crate::nodes::bound_node::BoundNode;
     use crate::nodes::node::{NodeKind, SoNError};
-    use crate::services::parser::{Parser, CTRL_NID, KEEP_ALIVE_NID, SCOPE_NID};
+    use crate::services::parser::{Parser, KEEP_ALIVE_NID, SCOPE_NID, START_NID};
     use crate::typ::typ::Typ;
 
     #[test]
     fn should_be_able_to_create_new_parser() {
         // Arrange & Act
-        let parser = Parser::new("return 1;").unwrap();
+        let parser = Parser::new_noarg("return 1;").unwrap();
 
         // Assert
         assert_eq!(3, parser.graph.len());
-        assert!(matches!( parser.graph.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert!(matches!( parser.graph.get(START_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
     fn should_parse_return() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -460,21 +482,21 @@ mod tests {
     #[test]
     fn should_drop_unused_nodes_but_never_the_keepalive_node() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
 
         // Act
         let _result = parser.parse().unwrap();
 
         // Assert
-        assert_eq!(5, parser.graph.iter().filter(|n| n.is_some()).count());
+        assert_eq!(6, parser.graph.iter().filter(|n| n.is_some()).count());
         assert!(matches!( parser.graph.get(KEEP_ALIVE_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::KeepAlive))
     }
 
     #[test]
     fn should_not_drop_any_node_when_cap_is_0() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -483,13 +505,13 @@ mod tests {
 
         // Assert
         assert_eq!(0, dropped_nodes);
-        assert_eq!(5, parser.graph.iter().filter(|n| n.is_some()).count());
+        assert_eq!(6, parser.graph.iter().filter(|n| n.is_some()).count());
     }
 
     #[test]
     fn should_only_drop_one_node_when_cap_is_1() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -498,14 +520,14 @@ mod tests {
 
         // Assert
         assert_eq!(1, dropped_nodes);
-        assert_eq!(4, parser.graph.iter().filter(|n| n.is_some()).count());
-        assert!(matches!( parser.graph.get(CTRL_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
+        assert_eq!(5, parser.graph.iter().filter(|n| n.is_some()).count());
+        assert!(matches!( parser.graph.get(START_NID).unwrap().as_ref().unwrap().node_kind, NodeKind::Start))
     }
 
     #[test]
     fn should_fail_when_invalid_syntax_is_used() {
         // Arrange
-        let mut parser = Parser::new("ret 1;").unwrap();
+        let mut parser = Parser::new_noarg("ret 1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -518,7 +540,7 @@ mod tests {
     #[test]
     fn should_check_for_semicolon() {
         // Arrange
-        let mut parser = Parser::new("return 1").unwrap();
+        let mut parser = Parser::new_noarg("return 1").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -531,7 +553,7 @@ mod tests {
     #[test]
     fn should_fail_at_brace() {
         // Arrange
-        let mut parser = Parser::new("return 1;}").unwrap();
+        let mut parser = Parser::new_noarg("return 1;}").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -544,7 +566,7 @@ mod tests {
     #[test]
     fn should_delete_nodes_that_arent_kept_alive() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
         let nid = parser.add_node_unrefined(vec![], NodeKind::Start).unwrap(); // this node is not kept
 
@@ -558,7 +580,7 @@ mod tests {
     #[test]
     fn should_parse_one_plus_one() {
         // Arrange
-        let mut parser = Parser::new("return 1+1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1+1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -572,7 +594,7 @@ mod tests {
     #[test]
     fn should_parse_one_minus_one() {
         // Arrange
-        let mut parser = Parser::new("return 1-1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1-1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -586,7 +608,7 @@ mod tests {
     #[test]
     fn should_parse_one_times_one() {
         // Arrange
-        let mut parser = Parser::new("return 1*1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1*1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -600,7 +622,7 @@ mod tests {
     #[test]
     fn should_parse_one_div_one() {
         // Arrange
-        let mut parser = Parser::new("return 1/1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1/1;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -614,7 +636,7 @@ mod tests {
     #[test]
     fn should_parse_mul_and_add() {
         // Arrange
-        let mut parser = Parser::new("return 1*2+3;").unwrap();
+        let mut parser = Parser::new_noarg("return 1*2+3;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -628,7 +650,7 @@ mod tests {
     #[test]
     fn should_parse_mul_and_mul() {
         // Arrange
-        let mut parser = Parser::new("return 1*2*3;").unwrap();
+        let mut parser = Parser::new_noarg("return 1*2*3;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -642,7 +664,7 @@ mod tests {
     #[test]
     fn should_parse_complex_expression() {
         // Arrange
-        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+        let mut parser = Parser::new_noarg("return 1+2*3+-5;").unwrap();
         parser.do_optimize = false;
 
         // Act
@@ -656,7 +678,7 @@ mod tests {
     #[test]
     fn should_peephole_computed_types() {
         // Arrange
-        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+        let mut parser = Parser::new_noarg("return 1+2*3+-5;").unwrap();
 
         // Act
         let result = parser.parse().unwrap();
@@ -669,7 +691,7 @@ mod tests {
     #[test]
     fn should_define_var() {
         // Arrange
-        let mut parser = Parser::new("").unwrap();
+        let mut parser = Parser::new_noarg("").unwrap();
         parser.push_scope().unwrap();
         let nid = parser.add_node_unrefined(vec![], NodeKind::Constant).unwrap();
 
@@ -690,7 +712,7 @@ mod tests {
     #[test]
     fn should_define_var_in_program() {
         // Arrange
-        let mut parser = Parser::new("int a=1; return a;").unwrap();
+        let mut parser = Parser::new_noarg("int a=1; return a;").unwrap();
 
         // Act
         let result = parser.parse().unwrap();
@@ -703,7 +725,7 @@ mod tests {
     #[test]
     fn should_return_error_on_variable_redefinition() {
         // Arrange
-        let mut parser = Parser::new("int a=1;int a=1;").unwrap();
+        let mut parser = Parser::new_noarg("int a=1;int a=1;").unwrap();
 
         // Act
         let result = parser.parse();
@@ -715,7 +737,7 @@ mod tests {
     #[test]
     fn should_return_error_on_undefined_variable() {
         // Arrange
-        let mut parser = Parser::new("a=1;").unwrap();
+        let mut parser = Parser::new_noarg("a=1;").unwrap();
 
         // Act
         let result = parser.parse();

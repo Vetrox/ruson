@@ -75,7 +75,12 @@ impl Typ {
                 Int { .. } | IntTop | IntBot => IntBot,
                 _ => Bot
             }
-            Tuple { .. } | TupleTop | TupleBot => panic!("not implemented yet"),
+            Tuple { .. } | TupleTop | TupleBot => {
+                if self == other {
+                    return self.clone();
+                }
+                panic!("not implemented yet")
+            },
             Ctrl => match other {
                 Top => Ctrl,
                 _ => Bot

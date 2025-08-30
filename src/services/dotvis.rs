@@ -143,7 +143,7 @@ mod tests {
     // #[test]
     fn should_output_minimal_dotfile() {
         // Arrange
-        let parser = Parser::new("").unwrap();
+        let parser = Parser::new_noarg("").unwrap();
 
         // Act
         let dotfile = parser.as_dotfile();
@@ -157,7 +157,7 @@ mod tests {
     // #[test]
     fn should_output_return_1_dotfile() {
         // Arrange
-        let mut parser = Parser::new("return 1;").unwrap();
+        let mut parser = Parser::new_noarg("return 1;").unwrap();
         parser.do_optimize = false;
         parser.parse().unwrap();
 
@@ -173,7 +173,7 @@ mod tests {
     // #[test]
     fn should_complex_dotfile() {
         // Arrange
-        let mut parser = Parser::new("return 1+2*3+-5;").unwrap();
+        let mut parser = Parser::new_noarg("return 1+2*3+-5;").unwrap();
         parser.do_optimize = false;
         parser.parse().unwrap();
 
