@@ -1,3 +1,4 @@
+use crate::errors::son_error::SoNError;
 use crate::nodes::bound_node::BoundNode;
 pub(crate) use crate::nodes::graph::Graph;
 use crate::nodes::node::NodeKind::{Add, Constant, Div, KeepAlive, Minus, Mul, Proj, Return, Scope, Start, Sub};
@@ -46,17 +47,6 @@ impl NodeKind {
             Return | Add | Sub | Mul | Div => 2,
         }
     }
-}
-
-#[derive(Debug)]
-pub enum SoNError {
-    NodeIdNotExisting,
-    NumberCannotStartWith0,
-    SyntaxExpected { expected: String, actual: String },
-    TypTransitionNotAllowed,
-    VariableRedefinition { variable: String },
-    VariableUndefined { variable: String },
-    DebugPropagateControlFlowUpward,
 }
 
 impl Node {

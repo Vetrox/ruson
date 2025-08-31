@@ -1,5 +1,6 @@
+use crate::errors::son_error::SoNError;
+use crate::nodes::node::NodeKind;
 use crate::nodes::node::NodeKind::{Constant, Mul};
-use crate::nodes::node::{NodeKind, SoNError};
 use crate::services::parser::Parser;
 use crate::typ::typ::Typ::Int;
 use NodeKind::{Add, Div, KeepAlive, Minus, Proj, Return, Scope, Start, Sub};

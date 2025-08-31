@@ -1,4 +1,5 @@
-use crate::nodes::node::{Graph, Node, NodeKind, SoNError};
+use crate::errors::son_error::SoNError;
+use crate::nodes::node::{Graph, Node, NodeKind};
 use crate::typ::typ::Typ;
 
 impl Graph {

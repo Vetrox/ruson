@@ -1,19 +1,20 @@
-use crate::nodes::node::SoNError::{DebugPropagateControlFlowUpward, VariableUndefined};
-use crate::nodes::node::{Graph, NodeKind, SoNError};
+use crate::errors::son_error::SoNError::{DebugPropagateControlFlowUpward, VariableUndefined};
+use crate::errors::son_error::SoNError::{SyntaxExpected, VariableRedefinition};
+use crate::errors::son_error::{ErrorWithContext, SoNError};
+use crate::nodes::node::{Graph, NodeKind};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::{Bot, Ctrl};
 use once_cell::sync::Lazy;
 use std::collections::hash_map::Values;
 use std::collections::{HashMap, HashSet};
-use SoNError::{SyntaxExpected, VariableRedefinition};
 
 pub static KEYWORDS: Lazy<HashSet<String>> = Lazy::new(|| {
     HashSet::from(["int".into(), "return".into()])
 });
 
 pub struct Parser {
-    lexer: Lexer,
+    pub lexer: Lexer,
     pub graph: Graph,
     /// peephole optimization
     pub do_optimize: bool,
@@ -204,7 +205,11 @@ impl Parser {
         panic!("Scope node was not scope kind.")
     }
 
-    pub fn parse(&mut self) -> Result<usize, SoNError> {
+    pub fn parse(&mut self) -> Result<usize, ErrorWithContext> {
+        self.parse_internal().map_err(|e| e.attach_context(self))
+    }
+
+    fn parse_internal(&mut self) -> Result<usize, SoNError> {
         self.push_scope()?;
         let ctrl_nid = self.add_node_unrefined(vec![START_NID], NodeKind::Proj { proj_index: 0, _dbg_proj_label: "$ctrl".into() })?;
         let arg_nid = self.with_kept_node(ctrl_nid, |parser| {
@@ -216,7 +221,7 @@ impl Parser {
         self.pop_scope()?;
 
         if !self.lexer.is_eof() {
-            return Err(SyntaxExpected { expected: "End of file".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+            return Err(SyntaxExpected { expected: "End of file".to_string(), but_got: self.lexer.dbg_get_any_next_token() })
         }
         self.keep_node(nid)?;
         while self.drop_unused_nodes() > 0 {
@@ -253,7 +258,7 @@ impl Parser {
     /// </pre>
     fn parse_statement(&mut self) -> Result<usize, SoNError> {
         if self.lexer.matsch("#showGraph;") {
-            let out = format!("#showGraph@{}\n{}", self.lexer.dbg_position(), self.as_dotfile());
+            let out = format!("#showGraph@{}\n{}", self.lexer.dbg_position_string(), self.as_dotfile());
             self._dbg_output.push_str(&out.as_str());
             println!("{}", out);
             return Err(DebugPropagateControlFlowUpward)
@@ -424,7 +429,7 @@ impl Parser {
         } else {
             Err(SyntaxExpected {
                 expected: syntax.to_string(),
-                actual: self.lexer.dbg_get_any_next_token(),
+                but_got: self.lexer.dbg_get_any_next_token(),
             })
         }
     }
@@ -436,7 +441,7 @@ impl Parser {
             && !KEYWORDS.contains(&name) {
             Ok(name)
         } else {
-            Err(SyntaxExpected { expected: "Identifier".to_string(), actual: self.lexer.dbg_get_any_next_token() })
+            Err(SyntaxExpected { expected: "Identifier".to_string(), but_got: self.lexer.dbg_get_any_next_token() })
         }
     }
 }
@@ -445,8 +450,9 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use crate::errors::son_error::{ErrorWithContext, SoNError};
     use crate::nodes::bound_node::BoundNode;
-    use crate::nodes::node::{NodeKind, SoNError};
+    use crate::nodes::node::NodeKind;
     use crate::services::parser::{Parser, KEEP_ALIVE_NID, SCOPE_NID, START_NID};
     use crate::typ::typ::Typ;
 
@@ -539,7 +545,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "="));
+        assert!(matches!(result, Err(ErrorWithContext{error: SoNError::SyntaxExpected {expected, ..},..}) if expected == "="));
     }
 
     #[test]
@@ -552,7 +558,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == ";"));
+        assert!(matches!(result, Err(ErrorWithContext{error: SoNError::SyntaxExpected {expected, ..},..}) if expected == ";"));
     }
 
     #[test]
@@ -565,7 +571,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::SyntaxExpected {expected, ..}) if expected == "End of file"));
+        assert!(matches!(result, Err(ErrorWithContext{error: SoNError::SyntaxExpected {expected, ..},..}) if expected == "End of file"));
     }
 
     #[test]
@@ -736,7 +742,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::VariableRedefinition { variable: v }) if v == "a"));
+        assert!(matches!(result, Err(ErrorWithContext{error: SoNError::VariableRedefinition { variable: v },..}) if v == "a"));
     }
 
     #[test]
@@ -748,7 +754,7 @@ mod tests {
         let result = parser.parse();
 
         // Assert
-        assert!(matches!(result, Err(SoNError::VariableUndefined { variable: v }) if v == "a"));
+        assert!(matches!(result, Err(ErrorWithContext{error: SoNError::VariableUndefined { variable: v },..}) if v == "a"));
     }
 
     #[test]

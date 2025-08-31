@@ -1,4 +1,4 @@
-use crate::nodes::node::SoNError;
+use crate::errors::son_error::SoNError;
 use std::fmt::{Display, Formatter};
 
 pub struct Lexer {
@@ -28,8 +28,12 @@ impl Lexer {
         self.position
     }
 
-    pub fn dbg_position(&self) -> String {
-        if let Some((line, column)) = self.line_col_for(self.position()) {
+    pub fn dbg_position(&self) -> Option<(usize, usize)> {
+        self.line_col_for(self.position())
+    }
+
+    pub fn dbg_position_string(&self) -> String {
+        if let Some((line, column)) = self.dbg_position() {
             format!("{}:{}", line, column)
         } else {
             "out of bounds".into()
@@ -289,7 +293,7 @@ mod tests {
         lexer.position = 4;
 
         // Act
-        let result = lexer.dbg_position();
+        let result = lexer.dbg_position_string();
 
         // Assert
         assert_eq!("2:2", result);
@@ -302,7 +306,7 @@ mod tests {
         lexer.position = 123;
 
         // Act
-        let result = lexer.dbg_position();
+        let result = lexer.dbg_position_string();
 
         // Assert
         assert_eq!("out of bounds", result);
