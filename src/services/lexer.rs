@@ -138,7 +138,7 @@ impl Lexer {
 
     pub fn parse_number(&mut self) -> Result<i64, SoNError> {
         let snum = self.parse_number_string();
-        if snum.chars().nth(0).is_some_and(|c| c.eq(&'0')) {
+        if snum.len() > 1 && snum.chars().nth(0).is_some_and(|c| c.eq(&'0')) {
             return Err(SoNError::NumberCannotStartWith0);
         }
         Ok(snum.parse::<i64>().expect("numbers must start with a digit"))
@@ -306,6 +306,18 @@ mod tests {
 
         // Assert
         assert_eq!("out of bounds", result);
+    }
+
+    #[test]
+    fn should_parse_zero_number() {
+        // Arrange
+        let mut lexer = Lexer::from_str("0");
+
+        // Act
+        let result = lexer.parse_number().unwrap();
+
+        // Assert
+        assert_eq!(0, result);
     }
 }
 
