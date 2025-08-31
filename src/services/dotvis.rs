@@ -36,11 +36,21 @@ impl Parser {
             // control nodes have box shape
             // other nodes are ellipses, i.e. default shape
             if n.bind(&self.graph).is_cfg() {
-                sb.push_str("shape=box style=filled fillcolor=yellow ");
+                sb.push_str("shape=box fillcolor=yellow style=\"filled");
+                if matches!(n.node_kind, NodeKind::Proj {..}) {
+                    sb.push_str(",dashed\"");
+                } else {
+                    sb.push_str("\"")
+                }
+            } else {
+                if matches!(n.node_kind, NodeKind::Proj {..}) {
+                    sb.push_str("style=dashed ");
+                }
             }
             sb.push_str("label=\"");
             sb.push_str(&lab);
             sb.push_str("\" ");
+
             sb.push_str("];\n");
         }
         sb.push_str("\t}\n");     // End Node cluster
