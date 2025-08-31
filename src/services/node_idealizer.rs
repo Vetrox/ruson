@@ -8,10 +8,10 @@ impl Parser {
     pub(crate) fn idealize_node(&mut self, nid: usize) -> Result<usize, SoNError> {
         let mut node = self.graph.get_node(nid)?.clone();
         match node.node_kind {
-            Constant => Ok(node.nid.clone()),
-            Return => Ok(node.nid.clone()),
-            Start => Ok(node.nid.clone()),
-            KeepAlive => Ok(node.nid.clone()),
+            Constant => Ok(nid),
+            Return => Ok(nid),
+            Start => Ok(nid),
+            KeepAlive => Ok(nid),
             Add => {
                 let lhs_nid = node.inputs.get(0).unwrap().clone();
                 let lhs = self.graph.get_node(lhs_nid)?;
@@ -33,7 +33,7 @@ impl Parser {
                 if !is_lhs_add && is_rhs_add {
                     node.inputs[0] = rhs_nid;
                     node.inputs[1] = lhs_nid;
-                    return Ok(node.nid.clone()); // T_LEFT_SPINE
+                    return Ok(nid); // T_LEFT_SPINE
                 }
 
                 if is_rhs_add {
@@ -47,7 +47,7 @@ impl Parser {
                 if !is_lhs_add && !is_rhs_add && lhs.uid > rhs.uid {
                     node.inputs[0] = rhs_nid;
                     node.inputs[1] = lhs_nid;
-                    return Ok(node.nid.clone()); // T_CANONIC_INC_NID
+                    return Ok(nid); // T_CANONIC_INC_NID
                 }
 
                 if is_lhs_add {
@@ -66,9 +66,9 @@ impl Parser {
                         return Ok(outer);  // T_CANONIC_INC_NID
                     }
                 }
-                Ok(node.nid.clone())
+                Ok(nid)
             }
-            Sub => Ok(node.nid.clone()),
+            Sub => Ok(nid),
             Mul => {
                 let lhs_nid = node.inputs.get(0).unwrap().clone();
                 let lhs = self.graph.get_node(lhs_nid)?;
@@ -82,10 +82,10 @@ impl Parser {
                 if lhs.typ().is_constant() && !rhs.typ().is_constant() {
                     node.inputs[0] = rhs_nid;
                     node.inputs[1] = lhs_nid;
-                    return Ok(node.nid.clone()); // T_RIGHT_CONST
+                    return Ok(nid); // T_RIGHT_CONST
                 }
 
-                Ok(node.nid.clone())
+                Ok(nid)
             }
             Div => {
                 let lhs_nid = node.inputs.get(0).unwrap().clone();
@@ -95,13 +95,13 @@ impl Parser {
                 if let Int { constant } = rhs.typ() && constant == 1 {
                     return Ok(lhs_nid); // T_ARITH_IDENT
                 }
-                Ok(node.nid.clone())
+                Ok(nid)
             }
             Minus => {
-                Ok(node.nid.clone())
+                Ok(nid)
             }
-            Scope { .. } => Ok(node.nid.clone()),
-            Proj { .. } => Ok(node.nid.clone())
+            Scope { .. } => Ok(nid),
+            Proj { .. } => Ok(nid)
         }
     }
 }
