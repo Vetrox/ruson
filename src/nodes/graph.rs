@@ -32,6 +32,7 @@ impl Graph {
     }
 
     pub fn new_node(&mut self, inputs: Vec<usize>, node_kind: NodeKind, typ: Typ) -> Result<usize, SoNError> {
+        assert_eq!(node_kind.arity(), inputs.len());
         let index = self.find_first_empty_cell();
 
         let node = Node::new(node_kind, self._node_id_counter, index, typ);

@@ -1,5 +1,6 @@
 use crate::nodes::bound_node::BoundNode;
 pub(crate) use crate::nodes::graph::Graph;
+use crate::nodes::node::NodeKind::{Add, Constant, Div, KeepAlive, Minus, Mul, Proj, Return, Scope, Start, Sub};
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
 
@@ -35,6 +36,16 @@ pub enum NodeKind {
     Minus,
     Scope { scopes: Vec<HashMap<String, usize>> },
     Proj { proj_index: usize, _dbg_proj_label: String },
+}
+
+impl NodeKind {
+    pub fn arity(&self) -> usize {
+        match self {
+            Start | KeepAlive | Scope { .. } | Constant => 0,
+            Minus | Proj { .. } => 1,
+            Return | Add | Sub | Mul | Div => 2,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -77,20 +88,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_construct_start_node() {
-        // Arrange
-        let mut graph = Graph::new();
-
-        // Act
-        let nid1 = graph.new_node(vec![], NodeKind::Start, Typ::Bot).unwrap();
-        let nid2 = graph.new_node(vec![nid1], NodeKind::Start, Typ::Bot).unwrap();
-
-        // Assert
-        assert_eq!(nid2, graph.get_node(nid1).unwrap().outputs[0]);
-        assert_eq!(0, graph.get_node(nid2).unwrap().outputs.len());
-    }
-
-    #[test]
     fn should_construct_constant_node() {
         // Arrange
         let mut graph = Graph::new();
@@ -103,38 +100,26 @@ mod tests {
     }
 
     #[test]
-    fn should_construct_return_node() {
-        // Arrange
-        let mut graph = Graph::new();
-
-        // Act
-        let nid1 = graph.new_node(vec![], NodeKind::Return, Typ::Bot).unwrap();
-
-        // Assert
-        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
-    }
-
-    #[test]
-    fn should_construct_return_node_in_empty_slot() {
+    fn should_construct_constant_node_in_empty_slot() {
         // Arrange
         let mut graph = Graph::from(vec![None]);
 
         // Act
-        let nid1 = graph.new_node(vec![], NodeKind::Return, Typ::Bot).unwrap();
+        let nid1 = graph.new_node(vec![], Constant, Typ::Bot).unwrap();
 
         // Assert
         assert_eq!(1, graph.len());
-        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().node_kind, NodeKind::Return));
+        assert!(matches!(graph.get(nid1).unwrap().as_ref().unwrap().node_kind, Constant));
     }
 
     #[test]
     fn should_be_able_to_contain_same_dependency_multiple_times() {
         // Arrange
         let mut graph = Graph::from(vec![None]);
-        let nid1 = graph.new_node(vec![], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid1 = graph.new_node(vec![], Constant, Typ::Bot).unwrap();
 
         // Act
-        let nid2 = graph.new_node(vec![nid1, nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid2 = graph.new_node(vec![nid1, nid1], Add, Typ::Bot).unwrap();
 
         // Assert
         let graph_br = graph;
@@ -147,8 +132,8 @@ mod tests {
         // Arrange
         let mut graph = Graph::from(vec![None]);
         let nid1 = graph.new_node(vec![], NodeKind::Constant, Typ::Bot).unwrap();
-        let nid2 = graph.new_node(vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
-        let nid3 = graph.new_node(vec![nid1], NodeKind::Constant, Typ::Bot).unwrap();
+        let nid2 = graph.new_node(vec![nid1], NodeKind::Minus, Typ::Bot).unwrap();
+        let nid3 = graph.new_node(vec![nid1], NodeKind::Minus, Typ::Bot).unwrap();
         let mut graph_br = graph;
         graph_br.add_reverse_dependencies_br(nid2, &vec![nid1]).unwrap();
         graph_br.add_dependencies_br(nid2, &vec![nid1]).unwrap();

@@ -164,14 +164,16 @@ impl Parser {
 
     /// Possibly creates a new node that this node needs to be replaced with.
     /// The caller can just use the returned nid instead of the input nid.
-    fn peephole(&mut self, mut nid: usize) -> Result<usize, SoNError> {
+    pub(crate) fn peephole(&mut self, mut nid: usize) -> Result<usize, SoNError> {
         let node = self.graph.get_node(nid)?.clone();
         if node.typ().is_constant() && !matches!(node.node_kind, NodeKind::Constant) {
             assert!(node.outputs.is_empty()); // otherwise it won't get gc-collected
             nid = self.add_node(vec![], NodeKind::Constant, node.typ())?; // T_CONSTPROP
         }
 
-        nid = self.idealize_node(nid)?;
+        nid = self.with_kept_node(nid, |parser| {
+            parser.idealize_node(nid)
+        })?;
         Ok(nid)
     }
 
@@ -767,5 +769,57 @@ mod tests {
         assert!(matches!(arg.node_kind, NodeKind::Proj {..}));
         assert!(matches!(ctrl.typ(), Typ::Ctrl));
         assert!(matches!(arg.typ(), Typ::Int { constant: 84 }));
+    }
+
+    #[test]
+    fn should_enforce_arithmetic_identity() { // T_ARITH_IDENT
+        // Arrange
+        let mut parser = Parser::new_noarg("return arg + 0 + 0 + 0;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return arg;", format!("{:}", BoundNode::new(&node, &parser.graph)));
+    }
+
+    #[test]
+    fn should_enforce_canonical_ordering() { // T_CANONIC_INC_NID
+        // Arrange
+        let mut parser = Parser::new_noarg("return arg*arg + arg;").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return (arg+(arg*arg));", format!("{:}", BoundNode::new(&node, &parser.graph)));
+    }
+
+    #[test]
+    fn should_enforce_left_spline() { // T_LEFT_SPINE
+        // Arrange
+        let mut parser = Parser::new_noarg("return (arg / 123) + (arg + 10);").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return ((arg+(arg/123))+10);", format!("{:}", BoundNode::new(&node, &parser.graph)));
+    }
+
+    #[test]
+    fn should_canonicalize_complexer_expression() {
+        // Arrange
+        let mut parser = Parser::new_noarg("return (arg / 123) + (arg + (2*arg));").unwrap();
+
+        // Act
+        let result = parser.parse().unwrap();
+
+        // Assert
+        let node = parser.graph.get_node(result).unwrap();
+        assert_eq!("return ((arg+(arg/123))+(arg*2));", format!("{:}", BoundNode::new(&node, &parser.graph)));
     }
 }
