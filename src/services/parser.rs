@@ -1,7 +1,7 @@
 use crate::errors::son_error::SoNError::{DebugPropagateControlFlowUpward, VariableUndefined};
 use crate::errors::son_error::SoNError::{SyntaxExpected, VariableRedefinition};
 use crate::errors::son_error::{ErrorWithContext, SoNError};
-use crate::nodes::node::{Graph, NodeKind};
+use crate::nodes::node::{CompNodeKind, Graph, NodeKind};
 use crate::services::lexer::Lexer;
 use crate::typ::typ::Typ;
 use crate::typ::typ::Typ::{Bot, Ctrl};
@@ -337,10 +337,104 @@ impl Parser {
     }
 
     /// <pre>
-    /// expression : additiveExpr
+    /// expression : logicalExpression
     /// </pre>
     fn parse_expression(&mut self) -> Result<usize, SoNError> {
-        self.parse_addition()
+        self.parse_logical()
+    }
+
+    /// <pre>
+    /// logicalExpression : bitwiseComparisonExpression
+    /// </pre>
+    fn parse_logical(&mut self) -> Result<usize, SoNError> {
+        let lhs = self.parse_bitwise_comparison()?;
+        if self.lexer.matsch("&&") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_logical()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LogAnd })
+            });
+        }
+        if self.lexer.matsch("||") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_logical()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LogOr })
+            });
+        }
+        Ok(lhs)
+    }
+
+    /// <pre>
+    /// bitwiseComparisonExpression : comparisonExpression
+    /// </pre>
+    fn parse_bitwise_comparison(&mut self) -> Result<usize, SoNError> {
+        let lhs = self.parse_comparison()?;
+        if self.lexer.matsch("&") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_bitwise_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LogAnd })
+            });
+        }
+        if self.lexer.matsch("^") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_bitwise_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LogXor })
+            });
+        }
+        if self.lexer.matsch("|") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_bitwise_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LogOr })
+            });
+        }
+        Ok(lhs)
+    }
+
+
+    /// <pre>
+    /// comparisonExpression : additiveExpr
+    /// </pre>
+    fn parse_comparison(&mut self) -> Result<usize, SoNError> {
+        let lhs = self.parse_addition()?;
+        if self.lexer.matsch("<") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LT })
+            });
+        }
+        if self.lexer.matsch(">") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                let comp = parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LEQ })?;
+                parser.add_node_unrefined(vec![comp], NodeKind::Not)
+            });
+        }
+        if self.lexer.matsch("<=") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LEQ })
+            });
+        }
+        if self.lexer.matsch(">=") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                let comp = parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::LT })?;
+                parser.add_node_unrefined(vec![comp], NodeKind::Not)
+            });
+        }
+        if self.lexer.matsch("==") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::EQ })
+            });
+        }
+        if self.lexer.matsch("!=") {
+            return self.with_kept_node(lhs, |parser| {
+                let rhs = parser.parse_comparison()?;
+                let comp = parser.add_node_unrefined(vec![lhs, rhs], NodeKind::Comp { kind: CompNodeKind::EQ })?;
+                parser.add_node_unrefined(vec![comp], NodeKind::Not)
+            });
+        }
+        Ok(lhs)
     }
 
     /// <pre>
@@ -391,6 +485,9 @@ impl Parser {
         if self.lexer.matsch("-") {
             let unary = self.parse_unary()?;
             self.add_node_unrefined(vec![unary], NodeKind::Minus)
+        } else if self.lexer.matsch("!") {
+            let unary = self.parse_unary()?;
+            self.add_node_unrefined(vec![unary], NodeKind::Not)
         } else {
             self.parse_primary()
         }

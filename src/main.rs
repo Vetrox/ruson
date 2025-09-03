@@ -9,7 +9,7 @@ mod errors;
 
 
 fn main() {
-    let mut parser = Parser::new_noarg("return 1 ^ 1;").unwrap();
+    let mut parser = Parser::new_noarg("return 1 ^ 1 ^ 1213 & 11111111;").unwrap();
     parser.do_optimize = true;
     let r = parser.parse().unwrap();
 
