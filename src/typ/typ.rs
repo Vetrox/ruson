@@ -16,6 +16,9 @@ pub enum Typ {
     TupleTop,
     TupleBot,
     Ctrl,
+    Bool { constant: bool },
+    BoolTop,
+    BoolBot,
 }
 
 impl Typ {
@@ -47,7 +50,10 @@ impl Typ {
             Tuple { .. } => self.clone(),
             TupleTop => TupleBot,
             TupleBot => TupleTop,
-            Ctrl => Ctrl
+            Ctrl => Ctrl,
+            Bool { .. } => self.clone(),
+            BoolTop => BoolBot,
+            BoolBot => BoolTop,
         }
     }
 
@@ -85,6 +91,26 @@ impl Typ {
                 Top => Ctrl,
                 _ => Bot
             },
+            Bool { constant } => match other {
+                Bool { constant: o_constant } => if constant == o_constant {
+                    self.clone()
+                } else {
+                    BoolBot
+                },
+                BoolTop | Top => self.clone(),
+                BoolBot => BoolBot,
+                _ => Bot,
+            },
+            BoolTop => match other {
+                Top => self.clone(),
+                Bool { .. } | BoolTop | BoolBot => other.clone(),
+                _ => Bot
+            }
+            BoolBot => match other {
+                Top => self.clone(),
+                Bool { .. } | BoolTop | BoolBot => BoolBot,
+                _ => Bot
+            }
         }
     }
 }

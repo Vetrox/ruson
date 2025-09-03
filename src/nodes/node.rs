@@ -1,9 +1,10 @@
 use crate::errors::son_error::SoNError;
 use crate::nodes::bound_node::BoundNode;
 pub(crate) use crate::nodes::graph::Graph;
-use crate::nodes::node::NodeKind::{Add, Constant, Div, KeepAlive, Minus, Mul, Proj, Return, Scope, Start, Sub};
+use crate::nodes::node::NodeKind::{Add, Comp, Constant, Div, KeepAlive, Minus, Mul, Proj, Return, Scope, Start, Sub};
 use crate::typ::typ::Typ;
 use std::collections::HashMap;
+use NodeKind::Not;
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -37,14 +38,26 @@ pub enum NodeKind {
     Minus,
     Scope { scopes: Vec<HashMap<String, usize>> },
     Proj { proj_index: usize, _dbg_proj_label: String },
+    Comp { kind: CompNodeKind },
+    Not,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CompNodeKind {
+    LT,
+    LEQ,
+    EQ,
+    LogAnd,
+    LogOr,
+    LogXor,
 }
 
 impl NodeKind {
     pub fn arity(&self) -> usize {
         match self {
             Start | KeepAlive | Scope { .. } | Constant => 0,
-            Minus | Proj { .. } => 1,
-            Return | Add | Sub | Mul | Div => 2,
+            Minus | Proj { .. } | Not => 1,
+            Return | Add | Sub | Mul | Div | Comp { .. } => 2,
         }
     }
 }

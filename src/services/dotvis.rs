@@ -130,6 +130,7 @@ fn node_icon(node: &Node) -> String {
         NodeKind::Constant => {
             match node.typ() {
                 Typ::Int { constant } => format!("#{}", constant),
+                Typ::Bool { constant } => format!("#{}", constant),
                 _ => panic!("Type {:?} for NodeKind::Constant unsupported", node.typ()),
             }
         }
@@ -143,6 +144,8 @@ fn node_icon(node: &Node) -> String {
         NodeKind::Minus => "-".into(),
         NodeKind::Scope { .. } => "Scope".into(),
         NodeKind::Proj { ref _dbg_proj_label, .. } => _dbg_proj_label.into(),
+        NodeKind::Comp { .. } => "Bool".into(),
+        NodeKind::Not => "Not".into(),
     }
 }
 

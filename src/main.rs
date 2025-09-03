@@ -9,9 +9,9 @@ mod errors;
 
 
 fn main() {
-    let mut parser = Parser::new_noarg("return -arg;").unwrap();
+    let mut parser = Parser::new_noarg("return 1 ^ 1;").unwrap();
     parser.do_optimize = true;
-    let r = parser.parse();
+    let r = parser.parse().unwrap();
 
     fs::write("target/output.dot", parser.as_dotfile()).expect("Unable to write file");
 }
